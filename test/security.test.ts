@@ -18,8 +18,35 @@ describe('attack scenarios', () => {
     lines1[2] = lines2[2]; // replace first chunk
     const swapped = lines1.join('\n');
 
-    await expect(decrypt(swapped, TEST_PASSWORD)).rejects.toThrow(
-      'authentication failed',
+    await expect(decrypt(swapped, TEST_PASSWORD)).rejects.toThrow();
+  });
+
+  it('chunk reorder detected by seal', async () => {
+    const text = 'first\n\nsecond\n\nthird';
+    const encrypted = await encrypt(text, TEST_PASSWORD, opts);
+
+    const lines = encrypted.split('\n');
+    const temp = lines[2];
+    lines[2] = lines[3];
+    lines[3] = temp;
+    const reordered = lines.join('\n');
+
+    await expect(decrypt(reordered, TEST_PASSWORD)).rejects.toThrow(
+      'Seal verification failed',
+    );
+  });
+
+  it('truncation detected by seal', async () => {
+    const text = 'first\n\nsecond\n\nthird';
+    const encrypted = await encrypt(text, TEST_PASSWORD, opts);
+
+    const lines = encrypted.split('\n');
+    const sealIdx = lines.findIndex(l => l.startsWith('seal_b64='));
+    lines.splice(sealIdx - 1, 1); // remove last chunk
+    const truncated = lines.join('\n');
+
+    await expect(decrypt(truncated, TEST_PASSWORD)).rejects.toThrow(
+      'Seal verification failed',
     );
   });
 
@@ -27,11 +54,9 @@ describe('attack scenarios', () => {
     const encrypted = await encrypt('hello', TEST_PASSWORD, opts);
 
     const lines = encrypted.split('\n');
-    // Tamper with argon2 params in header (change memory cost to in-bounds value)
     lines[0] = lines[0].replace(/m=\d+/, 'm=2048');
     const tampered = lines.join('\n');
 
-    // Header HMAC should catch this
     await expect(decrypt(tampered, TEST_PASSWORD)).rejects.toThrow(
       'Header authentication failed',
     );
@@ -41,11 +66,9 @@ describe('attack scenarios', () => {
     const encrypted = await encrypt('hello', TEST_PASSWORD, opts);
 
     const lines = encrypted.split('\n');
-    // Set absurdly high memory to attempt DoS
     lines[0] = lines[0].replace(/m=\d+/, 'm=999999999');
     const tampered = lines.join('\n');
 
-    // Bounds check catches this before HMAC or KDF
     await expect(decrypt(tampered, TEST_PASSWORD)).rejects.toThrow(
       'Invalid Argon2 memory',
     );
@@ -55,13 +78,10 @@ describe('attack scenarios', () => {
     const text = 'same content\n\nsame content\n\ndifferent';
     const encrypted = await encrypt(text, TEST_PASSWORD, opts);
 
-    const chunks = encrypted.split('\n').slice(2).filter(l => l !== '');
-    // The two "same content\n\n" chunks should have identical ciphertext
+    const chunks = encrypted.split('\n').slice(2).filter(l => l !== '' && !l.startsWith('seal_b64='));
     expect(chunks[0]).toBe(chunks[1]);
-    // The "different" chunk should differ
     expect(chunks[0]).not.toBe(chunks[2]);
 
-    // Still decrypts correctly
     const decrypted = await decrypt(encrypted, TEST_PASSWORD);
     expect(decrypted).toBe(text);
   });

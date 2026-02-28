@@ -1,3 +1,5 @@
+import { hmac } from '@noble/hashes/hmac';
+import { sha256 } from '@noble/hashes/sha256';
 import { chunkByParagraph, chunkByFixedSize } from './chunking.js';
 import { deriveMasterKey, deriveKeys } from './kdf.js';
 import { encryptChunk, decryptChunk } from './aead.js';
@@ -13,7 +15,7 @@ import {
 } from './header.js';
 import { ChunkingStrategy, DEFAULT_ARGON2_PARAMS } from './types.js';
 import type { EncryptOptions, MdencHeader } from './types.js';
-import { zeroize } from './crypto-utils.js';
+import { constantTimeEqual, zeroize } from './crypto-utils.js';
 
 export async function encrypt(
   plaintext: string,
@@ -67,7 +69,13 @@ export async function encrypt(
       chunkLines.push(toBase64(payload));
     }
 
-    return [headerLine, headerAuthLine, ...chunkLines, ''].join('\n');
+    // Compute seal HMAC over header + auth + chunk lines
+    const sealInput = headerLine + '\n' + headerAuthLine + '\n' + chunkLines.join('\n');
+    const sealData = new TextEncoder().encode(sealInput);
+    const sealHmac = hmac(sha256, headerKey, sealData);
+    const sealLine = `seal_b64=${toBase64(sealHmac)}`;
+
+    return [headerLine, headerAuthLine, ...chunkLines, sealLine, ''].join('\n');
   } finally {
     zeroize(masterKey, encKey, headerKey, nonceKey);
   }
@@ -110,18 +118,33 @@ export async function decrypt(
       throw new Error('Header authentication failed (wrong password or tampered header)');
     }
 
-    // Collect chunk lines (exclude seal line if present)
-    const chunkLines = lines.slice(2);
-    const sealIndex = chunkLines.findIndex(l => l.startsWith('seal_b64='));
-    const actualChunkLines = sealIndex >= 0 ? chunkLines.slice(0, sealIndex) : chunkLines;
+    // Collect chunk lines and seal line
+    const remaining = lines.slice(2);
+    const sealIndex = remaining.findIndex(l => l.startsWith('seal_b64='));
+    if (sealIndex < 0) {
+      throw new Error('Invalid mdenc file: missing seal');
+    }
 
-    if (actualChunkLines.length === 0) {
+    const chunkLines = remaining.slice(0, sealIndex);
+    if (chunkLines.length === 0) {
       throw new Error('Invalid mdenc file: no chunk lines');
+    }
+
+    // Verify seal HMAC
+    const sealMatch = remaining[sealIndex].match(/^seal_b64=([A-Za-z0-9+/=]+)$/);
+    if (!sealMatch) throw new Error('Invalid mdenc file: malformed seal line');
+    const storedSealHmac = fromBase64(sealMatch[1]);
+
+    const sealInput = headerLine + '\n' + authLine + '\n' + chunkLines.join('\n');
+    const sealData = new TextEncoder().encode(sealInput);
+    const computedSealHmac = hmac(sha256, headerKey, sealData);
+    if (!constantTimeEqual(computedSealHmac, storedSealHmac)) {
+      throw new Error('Seal verification failed (file tampered or chunks reordered)');
     }
 
     // Decrypt chunks
     const plaintextParts: string[] = [];
-    for (const line of actualChunkLines) {
+    for (const line of chunkLines) {
       const payload = fromBase64(line);
       const decrypted = decryptChunk(encKey, payload, header.fileId);
       plaintextParts.push(new TextDecoder().decode(decrypted));

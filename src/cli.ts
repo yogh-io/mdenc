@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { encrypt, decrypt } from './encrypt.js';
-import { seal, verifySeal } from './seal.js';
+import { verifySeal } from './seal.js';
 
 function readPasswordFromTTY(prompt: string): Promise<string> {
   return new Promise((resolve) => {
@@ -88,7 +88,6 @@ function usage(): never {
   console.error(`Usage:
   mdenc encrypt <file> [-o output]
   mdenc decrypt <file> [-o output]
-  mdenc seal <file>
   mdenc verify <file>`);
   process.exit(1);
 }
@@ -127,15 +126,6 @@ async function main(): Promise<void> {
         } else {
           process.stdout.write(decrypted);
         }
-        break;
-      }
-
-      case 'seal': {
-        const password = await getPassword();
-        const fileContent = readFileSync(inputFile, 'utf-8');
-        const sealed = await seal(fileContent, password);
-        writeFileSync(inputFile, sealed);
-        console.error('Sealed:', inputFile);
         break;
       }
 

@@ -61,7 +61,7 @@ describe('CLI', () => {
     }
   });
 
-  it('seal and verify', () => {
+  it('encrypt always includes seal, verify passes', () => {
     setup();
     try {
       const inputFile = join(tmpDir, 'input.md');
@@ -69,10 +69,9 @@ describe('CLI', () => {
       writeFileSync(inputFile, '# Test\n\nContent here.\n');
 
       run(['encrypt', inputFile, '-o', encFile]);
-      run(['seal', encFile]);
 
-      const sealed = readFileSync(encFile, 'utf-8');
-      expect(sealed).toContain('seal_b64=');
+      const encrypted = readFileSync(encFile, 'utf-8');
+      expect(encrypted).toContain('seal_b64=');
 
       // verify should not throw
       run(['verify', encFile]);

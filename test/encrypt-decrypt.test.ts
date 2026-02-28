@@ -39,8 +39,9 @@ describe('encrypt / decrypt', () => {
     });
 
     // All chunk lines should be identical (deterministic encryption with same keys)
-    const lines1 = encrypted1.split('\n').slice(2).filter(l => l !== '');
-    const lines2 = encrypted2.split('\n').slice(2).filter(l => l !== '');
+    const getChunks = (s: string) => s.split('\n').slice(2).filter(l => l !== '' && !l.startsWith('seal_b64='));
+    const lines1 = getChunks(encrypted1);
+    const lines2 = getChunks(encrypted2);
     expect(lines1.length).toBe(lines2.length);
     for (let i = 0; i < lines1.length; i++) {
       expect(lines2[i]).toBe(lines1[i]);
@@ -61,8 +62,9 @@ describe('encrypt / decrypt', () => {
       previousFile: encrypted1,
     });
 
-    const lines1 = encrypted1.split('\n').slice(2).filter(l => l !== '');
-    const lines2 = encrypted2.split('\n').slice(2).filter(l => l !== '');
+    const getChunks = (s: string) => s.split('\n').slice(2).filter(l => l !== '' && !l.startsWith('seal_b64='));
+    const lines1 = getChunks(encrypted1);
+    const lines2 = getChunks(encrypted2);
 
     expect(lines2[0]).toBe(lines1[0]); // first unchanged
     expect(lines2[1]).not.toBe(lines1[1]); // second changed
@@ -82,8 +84,9 @@ describe('encrypt / decrypt', () => {
       previousFile: encrypted1,
     });
 
-    const chunks1 = encrypted1.split('\n').slice(2).filter(l => l !== '');
-    const chunks2 = encrypted2.split('\n').slice(2).filter(l => l !== '');
+    const getChunks = (s: string) => s.split('\n').slice(2).filter(l => l !== '' && !l.startsWith('seal_b64='));
+    const chunks1 = getChunks(encrypted1);
+    const chunks2 = getChunks(encrypted2);
 
     expect(chunks2.length).toBe(chunks1.length + 1); // one new chunk
     expect(chunks2[0]).toBe(chunks1[0]); // "first\n\n" unchanged
@@ -127,14 +130,17 @@ describe('encrypt / decrypt', () => {
     expect(resultHeader).not.toBe(originalHeader);
   });
 
-  it('encrypted output is valid UTF-8 text', async () => {
+  it('encrypted output is valid UTF-8 text with seal', async () => {
     const encrypted = await encrypt(SIMPLE_MARKDOWN, TEST_PASSWORD, opts);
-    // Should be all printable ASCII + base64 chars
     const lines = encrypted.split('\n');
     expect(lines[0]).toMatch(/^mdenc:v1 /);
     expect(lines[1]).toMatch(/^hdrauth_b64=/);
-    for (let i = 2; i < lines.length - 1; i++) {
-      expect(lines[i]).toMatch(/^[A-Za-z0-9+/=]+$/);
+    // Chunk lines are base64, last non-empty line is seal
+    const contentLines = lines.slice(2).filter(l => l !== '');
+    const sealLine = contentLines.pop()!;
+    expect(sealLine).toMatch(/^seal_b64=[A-Za-z0-9+/=]+$/);
+    for (const line of contentLines) {
+      expect(line).toMatch(/^[A-Za-z0-9+/=]+$/);
     }
   });
 });
