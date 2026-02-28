@@ -53,7 +53,7 @@ Now you edit the "Action Items" paragraph and re-encrypt. Here's what `git diff`
  NNdpCjf++ncLe9yrRbotyPUWuib8Oe68xjkaTnEJVNO7snSFS0Z6cGwY...
 ```
 
-One paragraph changed, one line in the diff. Compare that to GPG, where the entire file would show as changed.
+One paragraph changed, one line in the diff. Even inserting a new paragraph between existing ones only adds one line -- surrounding chunks stay unchanged. Compare that to GPG, where the entire file would show as changed.
 
 ## Why
 
@@ -111,12 +111,12 @@ const ok = await verifySeal(sealed, password);
 
 ## How it works
 
-1. Your Markdown is split into chunks at paragraph boundaries (`\n\n`)
-2. Each chunk is encrypted with XChaCha20-Poly1305 using a random nonce
+1. Your Markdown is split into chunks at paragraph boundaries (runs of 2+ newlines)
+2. Each chunk is encrypted with XChaCha20-Poly1305 using a deterministic nonce derived from the content
 3. The output is plain UTF-8 text -- one base64 line per chunk
-4. On re-encryption, unchanged chunks reuse their ciphertext, producing minimal diffs
+4. Same content + same keys = same ciphertext, so unchanged chunks produce identical output and minimal diffs
 
-The password is stretched with Argon2id (64 MiB, 3 iterations). Keys are derived via HKDF-SHA256 with separate keys for encryption and header authentication.
+The password is stretched with Argon2id (64 MiB, 3 iterations). Keys are derived via HKDF-SHA256 with separate keys for encryption, header authentication, and nonce derivation.
 
 ## What leaks
 
@@ -125,6 +125,7 @@ mdenc is designed for diff-friendliness, not metadata hiding. An observer can se
 - How many paragraphs your document has
 - Approximate size of each paragraph
 - Which paragraphs changed between commits
+- Identical paragraphs within a file (they produce identical ciphertext)
 
 The *content* of your paragraphs stays confidential.
 

@@ -7,6 +7,7 @@ import { zeroize } from './crypto-utils.js';
 
 const ENC_INFO = new TextEncoder().encode('mdenc-v1-enc');
 const HDR_INFO = new TextEncoder().encode('mdenc-v1-hdr');
+const NONCE_INFO = new TextEncoder().encode('mdenc-v1-nonce');
 
 export function normalizePassword(password: string): Uint8Array {
   const normalized = password.normalize('NFKC');
@@ -35,10 +36,11 @@ export async function deriveMasterKey(
   }
 }
 
-export function deriveKeys(masterKey: Uint8Array): { encKey: Uint8Array; headerKey: Uint8Array } {
+export function deriveKeys(masterKey: Uint8Array): { encKey: Uint8Array; headerKey: Uint8Array; nonceKey: Uint8Array } {
   const encKey = hkdf(sha256, masterKey, undefined, ENC_INFO, 32);
   const headerKey = hkdf(sha256, masterKey, undefined, HDR_INFO, 32);
-  return { encKey, headerKey };
+  const nonceKey = hkdf(sha256, masterKey, undefined, NONCE_INFO, 32);
+  return { encKey, headerKey, nonceKey };
 }
 
 function hexToBytes(hex: string): Uint8Array {

@@ -24,9 +24,7 @@ export interface MdencHeader {
 }
 
 export interface MdencChunk {
-  index: number;
   payload: Uint8Array;     // nonce || ciphertext || tag
-  isFinal: boolean;
 }
 
 export interface MdencFile {

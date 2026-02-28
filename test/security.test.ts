@@ -5,20 +5,6 @@ import { TEST_PASSWORD, FAST_ARGON2 } from './helpers.js';
 const opts = { argon2: FAST_ARGON2 };
 
 describe('attack scenarios', () => {
-  it('truncation attack — missing final chunk', async () => {
-    const text = 'first\n\nsecond\n\nthird';
-    const encrypted = await encrypt(text, TEST_PASSWORD, opts);
-
-    // Remove the last chunk line
-    const lines = encrypted.split('\n');
-    lines.splice(lines.length - 2, 1); // remove last chunk (before trailing empty)
-    const truncated = lines.join('\n');
-
-    await expect(decrypt(truncated, TEST_PASSWORD)).rejects.toThrow(
-      'authentication failed',
-    );
-  });
-
   it('cross-file chunk swap', async () => {
     const text1 = 'file one\n\nsecond chunk';
     const text2 = 'file two\n\nsecond chunk';
@@ -33,22 +19,6 @@ describe('attack scenarios', () => {
     const swapped = lines1.join('\n');
 
     await expect(decrypt(swapped, TEST_PASSWORD)).rejects.toThrow(
-      'authentication failed',
-    );
-  });
-
-  it('chunk reorder', async () => {
-    const text = 'first\n\nsecond\n\nthird';
-    const encrypted = await encrypt(text, TEST_PASSWORD, opts);
-
-    const lines = encrypted.split('\n');
-    // Swap chunks at index 2 and 3 (first two chunk lines)
-    const temp = lines[2];
-    lines[2] = lines[3];
-    lines[3] = temp;
-    const reordered = lines.join('\n');
-
-    await expect(decrypt(reordered, TEST_PASSWORD)).rejects.toThrow(
       'authentication failed',
     );
   });
@@ -79,5 +49,20 @@ describe('attack scenarios', () => {
     await expect(decrypt(tampered, TEST_PASSWORD)).rejects.toThrow(
       'Invalid Argon2 memory',
     );
+  });
+
+  it('identical paragraphs produce identical ciphertext (documented leakage)', async () => {
+    const text = 'same content\n\nsame content\n\ndifferent';
+    const encrypted = await encrypt(text, TEST_PASSWORD, opts);
+
+    const chunks = encrypted.split('\n').slice(2).filter(l => l !== '');
+    // The two "same content\n\n" chunks should have identical ciphertext
+    expect(chunks[0]).toBe(chunks[1]);
+    // The "different" chunk should differ
+    expect(chunks[0]).not.toBe(chunks[2]);
+
+    // Still decrypts correctly
+    const decrypted = await decrypt(encrypted, TEST_PASSWORD);
+    expect(decrypted).toBe(text);
   });
 });

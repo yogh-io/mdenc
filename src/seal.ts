@@ -1,7 +1,7 @@
 import { hmac } from '@noble/hashes/hmac';
 import { sha256 } from '@noble/hashes/sha256';
 import { deriveMasterKey, deriveKeys } from './kdf.js';
-import { decryptChunk, encryptChunk } from './aead.js';
+import { decryptChunk } from './aead.js';
 import {
   parseHeader,
   verifyHeader,
@@ -29,7 +29,7 @@ export async function seal(
 
   // Derive keys
   const masterKey = await deriveMasterKey(password, header.salt, header.argon2);
-  const { encKey, headerKey } = deriveKeys(masterKey);
+  const { encKey, headerKey, nonceKey } = deriveKeys(masterKey);
 
   try {
     // Verify header
@@ -40,27 +40,23 @@ export async function seal(
     // Get chunk lines (strip old seal if present)
     const rawChunkLines = lines.slice(2);
     const sealIndex = rawChunkLines.findIndex(l => l.startsWith('seal_b64='));
-    const oldChunkLines = sealIndex >= 0 ? rawChunkLines.slice(0, sealIndex) : rawChunkLines;
+    const chunkLines = sealIndex >= 0 ? rawChunkLines.slice(0, sealIndex) : rawChunkLines;
 
-    // Re-encrypt all chunks with fresh nonces
-    const newChunkLines: string[] = [];
-    for (let i = 0; i < oldChunkLines.length; i++) {
-      const isFinal = i === oldChunkLines.length - 1;
-      const payload = fromBase64(oldChunkLines[i]);
-      const plaintext = decryptChunk(encKey, payload, header.fileId, i, isFinal);
-      const freshPayload = encryptChunk(encKey, plaintext, header.fileId, i, isFinal);
-      newChunkLines.push(toBase64(freshPayload));
+    // Verify each chunk decrypts (integrity check) — no re-encryption needed
+    for (const line of chunkLines) {
+      const payload = fromBase64(line);
+      decryptChunk(encKey, payload, header.fileId);
     }
 
     // Compute seal HMAC over header + auth + chunk lines
-    const sealInput = headerLine + '\n' + authLine + '\n' + newChunkLines.join('\n');
+    const sealInput = headerLine + '\n' + authLine + '\n' + chunkLines.join('\n');
     const sealData = new TextEncoder().encode(sealInput);
     const sealHmac = hmac(sha256, headerKey, sealData);
     const sealLine = `seal_b64=${toBase64(sealHmac)}`;
 
-    return [headerLine, authLine, ...newChunkLines, sealLine, ''].join('\n');
+    return [headerLine, authLine, ...chunkLines, sealLine, ''].join('\n');
   } finally {
-    zeroize(masterKey, encKey, headerKey);
+    zeroize(masterKey, encKey, headerKey, nonceKey);
   }
 }
 
@@ -83,7 +79,7 @@ export async function verifySeal(
 
   // Derive keys
   const masterKey = await deriveMasterKey(password, header.salt, header.argon2);
-  const { encKey, headerKey } = deriveKeys(masterKey);
+  const { encKey, headerKey, nonceKey } = deriveKeys(masterKey);
 
   try {
     // Verify header
@@ -110,7 +106,6 @@ export async function verifySeal(
 
     return constantTimeEqual(computed, storedHmac);
   } finally {
-    zeroize(masterKey, encKey, headerKey);
+    zeroize(masterKey, encKey, headerKey, nonceKey);
   }
 }
-

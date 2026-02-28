@@ -15,12 +15,6 @@ import { ChunkingStrategy, DEFAULT_ARGON2_PARAMS } from './types.js';
 import type { EncryptOptions, MdencHeader } from './types.js';
 import { zeroize } from './crypto-utils.js';
 
-interface PreviousFileData {
-  header: MdencHeader;
-  chunkLines: string[];
-  encKey: Uint8Array;
-}
-
 export async function encrypt(
   plaintext: string,
   password: string,
@@ -39,19 +33,24 @@ export async function encrypt(
     chunks = chunkByParagraph(plaintext, maxChunkSize);
   }
 
-  // Handle ciphertext reuse from previous file
-  let prev: PreviousFileData | undefined;
-  if (options?.previousFile) {
-    prev = await parsePreviousFile(options.previousFile, password);
-  }
+  // If previousFile provided, extract salt/fileId from its header for key continuity
+  let salt: Uint8Array;
+  let fileId: Uint8Array;
+  const prev = options?.previousFile
+    ? await parsePreviousFileHeader(options.previousFile, password)
+    : undefined;
 
-  // Reuse salt/fileId from previous file for ciphertext reuse, or generate new ones
-  const salt = prev ? prev.header.salt : generateSalt();
-  const fileId = prev ? prev.header.fileId : generateFileId();
+  if (prev) {
+    salt = prev.salt;
+    fileId = prev.fileId;
+  } else {
+    salt = generateSalt();
+    fileId = generateFileId();
+  }
 
   // Derive keys
   const masterKey = await deriveMasterKey(password, salt, argon2);
-  const { encKey, headerKey } = deriveKeys(masterKey);
+  const { encKey, headerKey, nonceKey } = deriveKeys(masterKey);
 
   try {
     // Build header
@@ -60,40 +59,17 @@ export async function encrypt(
     const headerHmac = authenticateHeader(headerKey, headerLine);
     const headerAuthLine = `hdrauth_b64=${toBase64(headerHmac)}`;
 
-    // Encrypt chunks, reusing ciphertext where possible
+    // Encrypt chunks — deterministic encryption handles reuse automatically
     const chunkLines: string[] = [];
-    for (let i = 0; i < chunks.length; i++) {
-      const isFinal = i === chunks.length - 1;
-      const chunkText = chunks[i];
+    for (const chunkText of chunks) {
       const chunkBytes = new TextEncoder().encode(chunkText);
-
-      let reused = false;
-      if (prev && i < prev.chunkLines.length) {
-        // Try to decrypt previous chunk at this index to compare
-        try {
-          const prevPayload = fromBase64(prev.chunkLines[i]);
-          const prevIsFinal = i === prev.chunkLines.length - 1;
-          const prevPlaintext = decryptChunk(prev.encKey, prevPayload, fileId, i, prevIsFinal);
-          // Compare plaintext — if identical AND final flag matches, reuse
-          if (isFinal === prevIsFinal && arraysEqual(chunkBytes, prevPlaintext)) {
-            chunkLines.push(prev.chunkLines[i]);
-            reused = true;
-          }
-        } catch {
-          // Previous chunk can't be decrypted at this index; encrypt fresh
-        }
-      }
-
-      if (!reused) {
-        const payload = encryptChunk(encKey, chunkBytes, fileId, i, isFinal);
-        chunkLines.push(toBase64(payload));
-      }
+      const payload = encryptChunk(encKey, nonceKey, chunkBytes, fileId);
+      chunkLines.push(toBase64(payload));
     }
 
     return [headerLine, headerAuthLine, ...chunkLines, ''].join('\n');
   } finally {
-    zeroize(masterKey, encKey, headerKey);
-    if (prev) zeroize(prev.encKey);
+    zeroize(masterKey, encKey, headerKey, nonceKey);
   }
 }
 
@@ -126,7 +102,7 @@ export async function decrypt(
 
   // Derive keys
   const masterKey = await deriveMasterKey(password, header.salt, header.argon2);
-  const { encKey, headerKey } = deriveKeys(masterKey);
+  const { encKey, headerKey, nonceKey } = deriveKeys(masterKey);
 
   try {
     // Verify header HMAC
@@ -145,23 +121,22 @@ export async function decrypt(
 
     // Decrypt chunks
     const plaintextParts: string[] = [];
-    for (let i = 0; i < actualChunkLines.length; i++) {
-      const isFinal = i === actualChunkLines.length - 1;
-      const payload = fromBase64(actualChunkLines[i]);
-      const decrypted = decryptChunk(encKey, payload, header.fileId, i, isFinal);
+    for (const line of actualChunkLines) {
+      const payload = fromBase64(line);
+      const decrypted = decryptChunk(encKey, payload, header.fileId);
       plaintextParts.push(new TextDecoder().decode(decrypted));
     }
 
     return plaintextParts.join('');
   } finally {
-    zeroize(masterKey, encKey, headerKey);
+    zeroize(masterKey, encKey, headerKey, nonceKey);
   }
 }
 
-async function parsePreviousFile(
+async function parsePreviousFileHeader(
   fileContent: string,
   password: string,
-): Promise<PreviousFileData | undefined> {
+): Promise<{ salt: Uint8Array; fileId: Uint8Array } | undefined> {
   try {
     const lines = fileContent.split('\n');
     if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
@@ -170,31 +145,20 @@ async function parsePreviousFile(
     const headerLine = lines[0];
     const header = parseHeader(headerLine);
 
-    // Parse and verify header HMAC before trusting derived keys
+    // Parse and verify header HMAC before trusting
     const authLine = lines[1];
     const authMatch = authLine.match(/^hdrauth_b64=([A-Za-z0-9+/=]+)$/);
     if (!authMatch) return undefined;
     const headerHmac = fromBase64(authMatch[1]);
 
     const masterKey = await deriveMasterKey(password, header.salt, header.argon2);
-    const { encKey, headerKey } = deriveKeys(masterKey);
+    const { headerKey } = deriveKeys(masterKey);
 
     if (!verifyHeader(headerKey, headerLine, headerHmac)) return undefined;
 
-    const chunkLines = lines.slice(2);
-    const sealIndex = chunkLines.findIndex(l => l.startsWith('seal_b64='));
-    const actualChunkLines = sealIndex >= 0 ? chunkLines.slice(0, sealIndex) : chunkLines;
-
-    return { header, chunkLines: actualChunkLines, encKey };
+    zeroize(masterKey, headerKey);
+    return { salt: header.salt, fileId: header.fileId };
   } catch {
     return undefined;
   }
-}
-
-function arraysEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false;
-  }
-  return true;
 }

@@ -31,14 +31,14 @@ describe('encrypt / decrypt', () => {
     );
   });
 
-  it('ciphertext reuse: unchanged chunks identical', async () => {
+  it('deterministic: same content + same keys = same ciphertext', async () => {
     const encrypted1 = await encrypt(SIMPLE_MARKDOWN, TEST_PASSWORD, opts);
     const encrypted2 = await encrypt(SIMPLE_MARKDOWN, TEST_PASSWORD, {
       ...opts,
       previousFile: encrypted1,
     });
 
-    // All chunk lines should be identical (same content, same position)
+    // All chunk lines should be identical (deterministic encryption with same keys)
     const lines1 = encrypted1.split('\n').slice(2).filter(l => l !== '');
     const lines2 = encrypted2.split('\n').slice(2).filter(l => l !== '');
     expect(lines1.length).toBe(lines2.length);
@@ -51,7 +51,7 @@ describe('encrypt / decrypt', () => {
     expect(decrypted).toBe(SIMPLE_MARKDOWN);
   });
 
-  it('ciphertext reuse: modified chunks differ', async () => {
+  it('deterministic: modified chunks differ, unchanged stay same', async () => {
     const original = 'first\n\nsecond\n\nthird';
     const modified = 'first\n\nchanged\n\nthird';
 
@@ -66,12 +66,33 @@ describe('encrypt / decrypt', () => {
 
     expect(lines2[0]).toBe(lines1[0]); // first unchanged
     expect(lines2[1]).not.toBe(lines1[1]); // second changed
-    // third: final flag changed position only if chunk count changed, but here it didn't
-    // However, the final flag means the last chunk AAD differs, so reuse depends on that
-    expect(lines2[2]).toBe(lines1[2]); // third unchanged (same final flag)
+    expect(lines2[2]).toBe(lines1[2]); // third unchanged
 
     const decrypted = await decrypt(encrypted2, TEST_PASSWORD);
     expect(decrypted).toBe(modified);
+  });
+
+  it('inserting a paragraph only adds one new line; surrounding chunks unchanged', async () => {
+    const original = 'first\n\nsecond\n\nthird';
+    const withInsert = 'first\n\nsecond\n\ninserted\n\nthird';
+
+    const encrypted1 = await encrypt(original, TEST_PASSWORD, opts);
+    const encrypted2 = await encrypt(withInsert, TEST_PASSWORD, {
+      ...opts,
+      previousFile: encrypted1,
+    });
+
+    const chunks1 = encrypted1.split('\n').slice(2).filter(l => l !== '');
+    const chunks2 = encrypted2.split('\n').slice(2).filter(l => l !== '');
+
+    expect(chunks2.length).toBe(chunks1.length + 1); // one new chunk
+    expect(chunks2[0]).toBe(chunks1[0]); // "first\n\n" unchanged
+    expect(chunks2[1]).toBe(chunks1[1]); // "second\n\n" unchanged
+    // chunks2[2] is new ("inserted\n\n")
+    expect(chunks2[3]).toBe(chunks1[2]); // "third" unchanged
+
+    const decrypted = await decrypt(encrypted2, TEST_PASSWORD);
+    expect(decrypted).toBe(withInsert);
   });
 
   it('handles large documents', async () => {
@@ -81,7 +102,7 @@ describe('encrypt / decrypt', () => {
     expect(decrypted).toBe(large);
   });
 
-  it('ciphertext reuse: tampered previous file falls back to fresh encryption', async () => {
+  it('tampered previous file falls back to fresh encryption', async () => {
     const text = 'hello\n\nworld';
     const encrypted = await encrypt(text, TEST_PASSWORD, opts);
 
@@ -100,12 +121,10 @@ describe('encrypt / decrypt', () => {
     const decrypted = await decrypt(result, TEST_PASSWORD);
     expect(decrypted).toBe(text);
 
-    // Chunk lines should differ from the tampered source (fresh encryption)
-    const resultLines = result.split('\n').slice(2).filter(l => l !== '');
-    const tamperedChunks = tampered.split('\n').slice(2).filter(l => l !== '');
-    // At least one chunk should differ since we generated fresh keys
-    const allSame = resultLines.every((l, i) => l === tamperedChunks[i]);
-    expect(allSame).toBe(false);
+    // Header should differ (fresh salt/fileId)
+    const resultHeader = result.split('\n')[0];
+    const originalHeader = encrypted.split('\n')[0];
+    expect(resultHeader).not.toBe(originalHeader);
   });
 
   it('encrypted output is valid UTF-8 text', async () => {

@@ -62,6 +62,35 @@ describe('chunkByParagraph', () => {
     expect(originalChunks[2]).toBe(editedChunks[2]); // third unchanged
     expect(originalChunks[1]).not.toBe(editedChunks[1]); // second changed
   });
+
+  it('handles 3 consecutive newlines (extra newline stays with preceding chunk)', () => {
+    const chunks = chunkByParagraph('A\n\n\nB');
+    expect(chunks).toEqual(['A\n\n\n', 'B']);
+    expect(chunks.join('')).toBe('A\n\n\nB');
+  });
+
+  it('handles 4 consecutive newlines', () => {
+    const chunks = chunkByParagraph('A\n\n\n\nB');
+    expect(chunks).toEqual(['A\n\n\n\n', 'B']);
+    expect(chunks.join('')).toBe('A\n\n\n\nB');
+  });
+
+  it('round-trip: join always equals original input', () => {
+    const inputs = [
+      'A\n\nB',
+      'A\n\n\nB',
+      'A\n\n\n\nB',
+      'A\n\n\n\n\nB',
+      'A\n\nB\n\n\nC\n\n\n\nD',
+      '\n\nleading',
+      'trailing\n\n',
+      '\n\n\n',
+    ];
+    for (const input of inputs) {
+      const chunks = chunkByParagraph(input);
+      expect(chunks.join('')).toBe(input);
+    }
+  });
 });
 
 describe('chunkByFixedSize', () => {

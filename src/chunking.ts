@@ -8,25 +8,25 @@ export function chunkByParagraph(text: string, maxSize = DEFAULT_MAX_CHUNK_SIZE)
     return [''];
   }
 
-  // Split on paragraph boundaries (\n\n), keeping separators attached to preceding chunk
-  const rawParts = normalized.split(/(\n\n)/);
+  // Split on runs of 2+ newlines, attaching each boundary to the preceding chunk
   const chunks: string[] = [];
-  let current = '';
+  const boundary = /\n{2,}/g;
+  let lastEnd = 0;
+  let match: RegExpExecArray | null;
 
-  for (let i = 0; i < rawParts.length; i++) {
-    const part = rawParts[i];
-    if (part === '\n\n') {
-      // Attach separator to current chunk
-      current += part;
-    } else {
-      if (current !== '') {
-        chunks.push(current);
-      }
-      current = part;
-    }
+  while ((match = boundary.exec(normalized)) !== null) {
+    // Content up to and including the boundary goes to the preceding chunk
+    const chunkEnd = match.index + match[0].length;
+    chunks.push(normalized.slice(lastEnd, chunkEnd));
+    lastEnd = chunkEnd;
   }
-  if (current !== '') {
-    chunks.push(current);
+
+  // Remaining content after the last boundary (or the entire string if no boundary)
+  if (lastEnd < normalized.length) {
+    chunks.push(normalized.slice(lastEnd));
+  } else if (chunks.length === 0) {
+    // No boundaries found and nothing remaining — shouldn't happen since we checked length > 0
+    chunks.push(normalized);
   }
 
   // Split any oversized chunks at byte boundaries

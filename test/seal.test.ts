@@ -22,6 +22,21 @@ describe('seal / verifySeal', () => {
     expect(valid).toBe(true);
   });
 
+  it('seal does not re-encrypt (chunk lines unchanged)', async () => {
+    const text = 'hello\n\nworld';
+    const encrypted = await encrypt(text, TEST_PASSWORD, opts);
+    const sealed = await seal(encrypted, TEST_PASSWORD);
+
+    // Extract chunk lines from both
+    const encLines = encrypted.split('\n').slice(2).filter(l => l !== '');
+    const sealLines = sealed.split('\n').slice(2).filter(l => !l.startsWith('seal_b64=') && l !== '');
+
+    expect(sealLines.length).toBe(encLines.length);
+    for (let i = 0; i < encLines.length; i++) {
+      expect(sealLines[i]).toBe(encLines[i]);
+    }
+  });
+
   it('sealed file detects rollback (replaced chunk)', async () => {
     const text = 'hello\n\nworld';
     const encrypted = await encrypt(text, TEST_PASSWORD, opts);
@@ -29,7 +44,10 @@ describe('seal / verifySeal', () => {
 
     // Replace a chunk line with a different encryption of different text
     const text2 = 'hello\n\nother';
-    const encrypted2 = await encrypt(text2, TEST_PASSWORD, opts);
+    const encrypted2 = await encrypt(text2, TEST_PASSWORD, {
+      ...opts,
+      previousFile: encrypted,
+    });
     const sealed2 = await seal(encrypted2, TEST_PASSWORD);
 
     // Swap second chunk from sealed2 into sealed
@@ -64,9 +82,6 @@ describe('seal / verifySeal', () => {
     const encrypted = await encrypt(text, TEST_PASSWORD, opts);
     const sealed = await seal(encrypted, TEST_PASSWORD);
 
-    // Replace header auth with a re-computed one (simulating an attacker
-    // who changes the header and can recompute the header HMAC, but cannot
-    // forge the seal HMAC which now covers the header)
     const lines = sealed.split('\n');
     // Swap the auth line with a different (invalid) value
     lines[1] = 'hdrauth_b64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
@@ -76,6 +91,22 @@ describe('seal / verifySeal', () => {
     await expect(verifySeal(tampered, TEST_PASSWORD)).rejects.toThrow(
       'Header authentication failed',
     );
+  });
+
+  it('sealed file detects chunk reorder', async () => {
+    const text = 'first\n\nsecond\n\nthird';
+    const encrypted = await encrypt(text, TEST_PASSWORD, opts);
+    const sealed = await seal(encrypted, TEST_PASSWORD);
+
+    const lines = sealed.split('\n');
+    // Swap chunks at index 2 and 3
+    const temp = lines[2];
+    lines[2] = lines[3];
+    lines[3] = temp;
+    const reordered = lines.join('\n');
+
+    const valid = await verifySeal(reordered, TEST_PASSWORD);
+    expect(valid).toBe(false);
   });
 
   it('unsealed files still decrypt', async () => {

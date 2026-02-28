@@ -45,20 +45,21 @@ describe('deriveMasterKey', () => {
 });
 
 describe('deriveKeys', () => {
-  it('enc_key differs from header_key', async () => {
+  it('produces three distinct 32-byte keys', async () => {
     const salt = new Uint8Array(16).fill(0x42);
     const masterKey = await deriveMasterKey(TEST_PASSWORD, salt, FAST_ARGON2);
-    const { encKey, headerKey } = deriveKeys(masterKey);
-    expect(Buffer.from(encKey).toString('hex')).not.toBe(
-      Buffer.from(headerKey).toString('hex'),
-    );
-  });
+    const { encKey, headerKey, nonceKey } = deriveKeys(masterKey);
 
-  it('keys are 32 bytes', async () => {
-    const salt = new Uint8Array(16).fill(0x42);
-    const masterKey = await deriveMasterKey(TEST_PASSWORD, salt, FAST_ARGON2);
-    const { encKey, headerKey } = deriveKeys(masterKey);
     expect(encKey.length).toBe(32);
     expect(headerKey.length).toBe(32);
+    expect(nonceKey.length).toBe(32);
+
+    const encHex = Buffer.from(encKey).toString('hex');
+    const hdrHex = Buffer.from(headerKey).toString('hex');
+    const nonceHex = Buffer.from(nonceKey).toString('hex');
+
+    expect(encHex).not.toBe(hdrHex);
+    expect(encHex).not.toBe(nonceHex);
+    expect(hdrHex).not.toBe(nonceHex);
   });
 });

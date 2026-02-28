@@ -90,7 +90,7 @@ describe('authenticateHeader / verifyHeader', () => {
     const header = makeHeader();
     const line = serializeHeader(header);
     const mac = authenticateHeader(headerKey, line);
-    const tampered = line.replace('v1', 'v2');
+    const tampered = line.replace('v1', 'v9');
     expect(verifyHeader(headerKey, tampered, mac)).toBe(false);
   });
 });
