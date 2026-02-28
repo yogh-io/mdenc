@@ -2,7 +2,8 @@ import { hmac } from '@noble/hashes/hmac';
 import { sha256 } from '@noble/hashes/sha256';
 import { randomBytes } from '@noble/ciphers/webcrypto';
 import type { MdencHeader, Argon2Params } from './types.js';
-import { DEFAULT_ARGON2_PARAMS } from './types.js';
+import { DEFAULT_ARGON2_PARAMS, ARGON2_BOUNDS } from './types.js';
+import { constantTimeEqual } from './crypto-utils.js';
 
 export function generateSalt(): Uint8Array {
   return randomBytes(16);
@@ -42,7 +43,22 @@ export function parseHeader(line: string): MdencHeader {
     parallelism: parseInt(argonMatch[3], 10),
   };
 
+  validateArgon2Params(argon2);
+
   return { version: 'v1', salt, fileId, argon2 };
+}
+
+export function validateArgon2Params(params: Argon2Params): void {
+  const { memory, iterations, parallelism } = ARGON2_BOUNDS;
+  if (params.memory < memory.min || params.memory > memory.max) {
+    throw new Error(`Invalid Argon2 memory: ${params.memory} KiB (must be ${memory.min}–${memory.max})`);
+  }
+  if (params.iterations < iterations.min || params.iterations > iterations.max) {
+    throw new Error(`Invalid Argon2 iterations: ${params.iterations} (must be ${iterations.min}–${iterations.max})`);
+  }
+  if (params.parallelism < parallelism.min || params.parallelism > parallelism.max) {
+    throw new Error(`Invalid Argon2 parallelism: ${params.parallelism} (must be ${parallelism.min}–${parallelism.max})`);
+  }
 }
 
 export function authenticateHeader(headerKey: Uint8Array, headerLine: string): Uint8Array {
@@ -57,15 +73,6 @@ export function verifyHeader(
 ): boolean {
   const computed = authenticateHeader(headerKey, headerLine);
   return constantTimeEqual(computed, hmacBytes);
-}
-
-function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a[i] ^ b[i];
-  }
-  return diff === 0;
 }
 
 export function toBase64(bytes: Uint8Array): string {

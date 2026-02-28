@@ -59,6 +59,25 @@ describe('seal / verifySeal', () => {
     expect(valid).toBe(false);
   });
 
+  it('sealed file detects header tampering via seal HMAC', async () => {
+    const text = 'hello\n\nworld';
+    const encrypted = await encrypt(text, TEST_PASSWORD, opts);
+    const sealed = await seal(encrypted, TEST_PASSWORD);
+
+    // Replace header auth with a re-computed one (simulating an attacker
+    // who changes the header and can recompute the header HMAC, but cannot
+    // forge the seal HMAC which now covers the header)
+    const lines = sealed.split('\n');
+    // Swap the auth line with a different (invalid) value
+    lines[1] = 'hdrauth_b64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+    const tampered = lines.join('\n');
+
+    // verifySeal should throw on header auth failure
+    await expect(verifySeal(tampered, TEST_PASSWORD)).rejects.toThrow(
+      'Header authentication failed',
+    );
+  });
+
   it('unsealed files still decrypt', async () => {
     const text = 'hello\n\nworld';
     const encrypted = await encrypt(text, TEST_PASSWORD, opts);

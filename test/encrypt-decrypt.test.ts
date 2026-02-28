@@ -81,6 +81,33 @@ describe('encrypt / decrypt', () => {
     expect(decrypted).toBe(large);
   });
 
+  it('ciphertext reuse: tampered previous file falls back to fresh encryption', async () => {
+    const text = 'hello\n\nworld';
+    const encrypted = await encrypt(text, TEST_PASSWORD, opts);
+
+    // Tamper with the header auth line
+    const lines = encrypted.split('\n');
+    lines[1] = 'hdrauth_b64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+    const tampered = lines.join('\n');
+
+    // Should still encrypt successfully (falls back to fresh keys)
+    const result = await encrypt(text, TEST_PASSWORD, {
+      ...opts,
+      previousFile: tampered,
+    });
+
+    // Verify the result decrypts correctly
+    const decrypted = await decrypt(result, TEST_PASSWORD);
+    expect(decrypted).toBe(text);
+
+    // Chunk lines should differ from the tampered source (fresh encryption)
+    const resultLines = result.split('\n').slice(2).filter(l => l !== '');
+    const tamperedChunks = tampered.split('\n').slice(2).filter(l => l !== '');
+    // At least one chunk should differ since we generated fresh keys
+    const allSame = resultLines.every((l, i) => l === tamperedChunks[i]);
+    expect(allSame).toBe(false);
+  });
+
   it('encrypted output is valid UTF-8 text', async () => {
     const encrypted = await encrypt(SIMPLE_MARKDOWN, TEST_PASSWORD, opts);
     // Should be all printable ASCII + base64 chars

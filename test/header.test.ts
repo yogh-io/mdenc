@@ -46,9 +46,32 @@ describe('serializeHeader / parseHeader', () => {
 
   it('invalid headers produce clear errors', () => {
     expect(() => parseHeader('not a header')).toThrow('missing mdenc:v1');
-    expect(() => parseHeader('mdenc:v1 file_id_b64=AAAA argon2=m=1,t=1,p=1')).toThrow('missing salt_b64');
-    expect(() => parseHeader('mdenc:v1 salt_b64=AAAAAAAAAAAAAAAAAAAAAA== argon2=m=1,t=1,p=1')).toThrow('missing file_id_b64');
+    expect(() => parseHeader('mdenc:v1 file_id_b64=AAAA argon2=m=1024,t=1,p=1')).toThrow('missing salt_b64');
+    expect(() => parseHeader('mdenc:v1 salt_b64=AAAAAAAAAAAAAAAAAAAAAA== argon2=m=1024,t=1,p=1')).toThrow('missing file_id_b64');
     expect(() => parseHeader('mdenc:v1 salt_b64=AAAAAAAAAAAAAAAAAAAAAA== file_id_b64=AAAAAAAAAAAAAAAAAAAAAA==')).toThrow('missing argon2');
+  });
+
+  it('rejects out-of-bounds Argon2 parameters', () => {
+    const salt = 'AAAAAAAAAAAAAAAAAAAAAA==';
+    const fid = 'AAAAAAAAAAAAAAAAAAAAAA==';
+    // memory too low
+    expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} argon2=m=512,t=1,p=1`))
+      .toThrow('Invalid Argon2 memory');
+    // memory too high
+    expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} argon2=m=5000000,t=1,p=1`))
+      .toThrow('Invalid Argon2 memory');
+    // iterations too low
+    expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} argon2=m=1024,t=0,p=1`))
+      .toThrow('Invalid Argon2 iterations');
+    // iterations too high
+    expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} argon2=m=1024,t=101,p=1`))
+      .toThrow('Invalid Argon2 iterations');
+    // parallelism too low
+    expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} argon2=m=1024,t=1,p=0`))
+      .toThrow('Invalid Argon2 parallelism');
+    // parallelism too high
+    expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} argon2=m=1024,t=1,p=17`))
+      .toThrow('Invalid Argon2 parallelism');
   });
 });
 

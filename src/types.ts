@@ -10,6 +10,12 @@ export const DEFAULT_ARGON2_PARAMS: Argon2Params = {
   parallelism: 1,
 };
 
+export const ARGON2_BOUNDS = {
+  memory: { min: 1024, max: 4194304 },       // 1 MiB – 4 GiB
+  iterations: { min: 1, max: 100 },
+  parallelism: { min: 1, max: 16 },
+} as const;
+
 export interface MdencHeader {
   version: 'v1';
   salt: Uint8Array;        // 16 bytes

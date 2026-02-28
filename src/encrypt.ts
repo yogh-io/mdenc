@@ -13,6 +13,7 @@ import {
 } from './header.js';
 import { ChunkingStrategy, DEFAULT_ARGON2_PARAMS } from './types.js';
 import type { EncryptOptions, MdencHeader } from './types.js';
+import { zeroize } from './crypto-utils.js';
 
 interface PreviousFileData {
   header: MdencHeader;
@@ -52,43 +53,48 @@ export async function encrypt(
   const masterKey = await deriveMasterKey(password, salt, argon2);
   const { encKey, headerKey } = deriveKeys(masterKey);
 
-  // Build header
-  const header: MdencHeader = { version: 'v1', salt, fileId, argon2 };
-  const headerLine = serializeHeader(header);
-  const headerHmac = authenticateHeader(headerKey, headerLine);
-  const headerAuthLine = `hdrauth_b64=${toBase64(headerHmac)}`;
+  try {
+    // Build header
+    const header: MdencHeader = { version: 'v1', salt, fileId, argon2 };
+    const headerLine = serializeHeader(header);
+    const headerHmac = authenticateHeader(headerKey, headerLine);
+    const headerAuthLine = `hdrauth_b64=${toBase64(headerHmac)}`;
 
-  // Encrypt chunks, reusing ciphertext where possible
-  const chunkLines: string[] = [];
-  for (let i = 0; i < chunks.length; i++) {
-    const isFinal = i === chunks.length - 1;
-    const chunkText = chunks[i];
-    const chunkBytes = new TextEncoder().encode(chunkText);
+    // Encrypt chunks, reusing ciphertext where possible
+    const chunkLines: string[] = [];
+    for (let i = 0; i < chunks.length; i++) {
+      const isFinal = i === chunks.length - 1;
+      const chunkText = chunks[i];
+      const chunkBytes = new TextEncoder().encode(chunkText);
 
-    let reused = false;
-    if (prev && i < prev.chunkLines.length) {
-      // Try to decrypt previous chunk at this index to compare
-      try {
-        const prevPayload = fromBase64(prev.chunkLines[i]);
-        const prevIsFinal = i === prev.chunkLines.length - 1;
-        const prevPlaintext = decryptChunk(prev.encKey, prevPayload, fileId, i, prevIsFinal);
-        // Compare plaintext — if identical AND final flag matches, reuse
-        if (isFinal === prevIsFinal && arraysEqual(chunkBytes, prevPlaintext)) {
-          chunkLines.push(prev.chunkLines[i]);
-          reused = true;
+      let reused = false;
+      if (prev && i < prev.chunkLines.length) {
+        // Try to decrypt previous chunk at this index to compare
+        try {
+          const prevPayload = fromBase64(prev.chunkLines[i]);
+          const prevIsFinal = i === prev.chunkLines.length - 1;
+          const prevPlaintext = decryptChunk(prev.encKey, prevPayload, fileId, i, prevIsFinal);
+          // Compare plaintext — if identical AND final flag matches, reuse
+          if (isFinal === prevIsFinal && arraysEqual(chunkBytes, prevPlaintext)) {
+            chunkLines.push(prev.chunkLines[i]);
+            reused = true;
+          }
+        } catch {
+          // Previous chunk can't be decrypted at this index; encrypt fresh
         }
-      } catch {
-        // Previous chunk can't be decrypted at this index; encrypt fresh
+      }
+
+      if (!reused) {
+        const payload = encryptChunk(encKey, chunkBytes, fileId, i, isFinal);
+        chunkLines.push(toBase64(payload));
       }
     }
 
-    if (!reused) {
-      const payload = encryptChunk(encKey, chunkBytes, fileId, i, isFinal);
-      chunkLines.push(toBase64(payload));
-    }
+    return [headerLine, headerAuthLine, ...chunkLines, ''].join('\n');
+  } finally {
+    zeroize(masterKey, encKey, headerKey);
+    if (prev) zeroize(prev.encKey);
   }
-
-  return [headerLine, headerAuthLine, ...chunkLines, ''].join('\n');
 }
 
 export async function decrypt(
@@ -122,30 +128,34 @@ export async function decrypt(
   const masterKey = await deriveMasterKey(password, header.salt, header.argon2);
   const { encKey, headerKey } = deriveKeys(masterKey);
 
-  // Verify header HMAC
-  if (!verifyHeader(headerKey, headerLine, headerHmac)) {
-    throw new Error('Header authentication failed (wrong password or tampered header)');
+  try {
+    // Verify header HMAC
+    if (!verifyHeader(headerKey, headerLine, headerHmac)) {
+      throw new Error('Header authentication failed (wrong password or tampered header)');
+    }
+
+    // Collect chunk lines (exclude seal line if present)
+    const chunkLines = lines.slice(2);
+    const sealIndex = chunkLines.findIndex(l => l.startsWith('seal_b64='));
+    const actualChunkLines = sealIndex >= 0 ? chunkLines.slice(0, sealIndex) : chunkLines;
+
+    if (actualChunkLines.length === 0) {
+      throw new Error('Invalid mdenc file: no chunk lines');
+    }
+
+    // Decrypt chunks
+    const plaintextParts: string[] = [];
+    for (let i = 0; i < actualChunkLines.length; i++) {
+      const isFinal = i === actualChunkLines.length - 1;
+      const payload = fromBase64(actualChunkLines[i]);
+      const decrypted = decryptChunk(encKey, payload, header.fileId, i, isFinal);
+      plaintextParts.push(new TextDecoder().decode(decrypted));
+    }
+
+    return plaintextParts.join('');
+  } finally {
+    zeroize(masterKey, encKey, headerKey);
   }
-
-  // Collect chunk lines (exclude seal line if present)
-  const chunkLines = lines.slice(2);
-  const sealIndex = chunkLines.findIndex(l => l.startsWith('seal_b64='));
-  const actualChunkLines = sealIndex >= 0 ? chunkLines.slice(0, sealIndex) : chunkLines;
-
-  if (actualChunkLines.length === 0) {
-    throw new Error('Invalid mdenc file: no chunk lines');
-  }
-
-  // Decrypt chunks
-  const plaintextParts: string[] = [];
-  for (let i = 0; i < actualChunkLines.length; i++) {
-    const isFinal = i === actualChunkLines.length - 1;
-    const payload = fromBase64(actualChunkLines[i]);
-    const decrypted = decryptChunk(encKey, payload, header.fileId, i, isFinal);
-    plaintextParts.push(new TextDecoder().decode(decrypted));
-  }
-
-  return plaintextParts.join('');
 }
 
 async function parsePreviousFile(
@@ -157,9 +167,19 @@ async function parsePreviousFile(
     if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
     if (lines.length < 3) return undefined;
 
-    const header = parseHeader(lines[0]);
+    const headerLine = lines[0];
+    const header = parseHeader(headerLine);
+
+    // Parse and verify header HMAC before trusting derived keys
+    const authLine = lines[1];
+    const authMatch = authLine.match(/^hdrauth_b64=([A-Za-z0-9+/=]+)$/);
+    if (!authMatch) return undefined;
+    const headerHmac = fromBase64(authMatch[1]);
+
     const masterKey = await deriveMasterKey(password, header.salt, header.argon2);
-    const { encKey } = deriveKeys(masterKey);
+    const { encKey, headerKey } = deriveKeys(masterKey);
+
+    if (!verifyHeader(headerKey, headerLine, headerHmac)) return undefined;
 
     const chunkLines = lines.slice(2);
     const sealIndex = chunkLines.findIndex(l => l.startsWith('seal_b64='));

@@ -57,13 +57,27 @@ describe('attack scenarios', () => {
     const encrypted = await encrypt('hello', TEST_PASSWORD, opts);
 
     const lines = encrypted.split('\n');
-    // Tamper with argon2 params in header (change memory cost)
-    lines[0] = lines[0].replace(/m=\d+/, 'm=512');
+    // Tamper with argon2 params in header (change memory cost to in-bounds value)
+    lines[0] = lines[0].replace(/m=\d+/, 'm=2048');
     const tampered = lines.join('\n');
 
     // Header HMAC should catch this
     await expect(decrypt(tampered, TEST_PASSWORD)).rejects.toThrow(
       'Header authentication failed',
+    );
+  });
+
+  it('rejects Argon2 parameter DoS (extreme values)', async () => {
+    const encrypted = await encrypt('hello', TEST_PASSWORD, opts);
+
+    const lines = encrypted.split('\n');
+    // Set absurdly high memory to attempt DoS
+    lines[0] = lines[0].replace(/m=\d+/, 'm=999999999');
+    const tampered = lines.join('\n');
+
+    // Bounds check catches this before HMAC or KDF
+    await expect(decrypt(tampered, TEST_PASSWORD)).rejects.toThrow(
+      'Invalid Argon2 memory',
     );
   });
 });

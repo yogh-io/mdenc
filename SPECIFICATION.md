@@ -143,12 +143,12 @@ The seal operation provides file-level integrity protection for use outside of g
 
 Sealing:
 1. Re-encrypt all chunks with fresh random nonces
-2. Compute HMAC-SHA256 over the concatenation of all chunk ciphertext lines (joined by `\n`), keyed with `header_key`
+2. Compute HMAC-SHA256 over the header line, header auth line, and all chunk ciphertext lines (concatenated as `<header_line>\n<auth_line>\n<chunk_lines joined by \n>`), keyed with `header_key`
 3. Append a seal line: `seal_b64=<hmac>`
 
 Verification:
 1. Decrypt and verify the file as normal
-2. Additionally verify the seal HMAC over all chunk lines
+2. Additionally verify the seal HMAC over the header line, header auth line, and all chunk lines
 
 The seal is optional. Files without a seal line are valid and decrypt normally. The seal detects rollback attacks (replacing the file with an older valid version) which per-chunk AEAD alone cannot prevent.
 
