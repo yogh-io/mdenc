@@ -22,6 +22,7 @@ The attacker cannot:
 | Key derivation | HKDF-SHA256 | Separate info strings per key |
 | Nonce derivation | HMAC-SHA256 | Truncated to 24 bytes |
 | Header auth | HMAC-SHA256 | Keyed with header_key |
+| Seal | HMAC-SHA256 | Keyed with header_key |
 
 ## Key Separation
 
@@ -35,7 +36,7 @@ This separation ensures that compromising one key does not compromise the others
 
 ## Deterministic Encryption
 
-mdenc v1 uses deterministic nonces derived via `HMAC-SHA256(nonce_key, plaintext)`, truncated to 24 bytes. This means:
+mdenc uses deterministic nonces derived via `HMAC-SHA256(nonce_key, plaintext)`, truncated to 24 bytes. This means:
 
 - **Same plaintext + same keys = same ciphertext**: This is the core mechanism for diff-friendliness. Unchanged paragraphs automatically produce identical ciphertext without explicit comparison.
 - **Position-independent**: The AAD contains only the version and file ID (no chunk index or finality flag). Inserting a paragraph between existing ones does not change the ciphertext of surrounding paragraphs.
@@ -63,12 +64,14 @@ The AAD binds each chunk to its version and file identity:
 The header HMAC prevents tampering with algorithm parameters (e.g., downgrading Argon2id cost).
 
 ### Seal (File-Level Integrity)
-The optional seal provides file-level integrity via HMAC over all lines. It detects:
+Every mdenc file includes a seal: an HMAC-SHA256 over the header line, header auth line, and all chunk lines, keyed with `header_key`. The seal is always present -- encryption always produces it, and decryption always verifies it.
+
+The seal detects:
 - **Chunk reordering**: Changing the order of chunk lines invalidates the seal
 - **Chunk truncation**: Removing chunks invalidates the seal
 - **Rollback attacks**: Replacing chunks with older valid ciphertext invalidates the seal
 
-Without a seal, chunk reordering and truncation are not detected by AEAD alone (since AAD is position-independent). For high-integrity use cases, always seal after encrypting.
+Since the per-chunk AAD is position-independent (to enable minimal diffs on paragraph insertion), the seal is the mechanism that provides ordering and completeness guarantees.
 
 ## Accepted Leakage
 
@@ -92,12 +95,8 @@ Each file has a unique random file ID embedded in the AAD. Chunks from one file 
 ### With Git
 Git's content-addressable storage (SHA-based commit hashes) inherently protects against rollback. An attacker cannot replace a file with an older version without it being visible in the git log.
 
-### Without Git (Seal Operation)
-The optional seal operation provides rollback protection outside git. A sealed file has a file-level HMAC over all chunk ciphertext. Replacing any chunk (even with a previously valid chunk) invalidates the seal.
-
-Limitations of the seal:
-- The seal is optional; unsealed files have no rollback or reorder protection
-- The seal protects a single point in time, not a history
+### With Seal
+The seal HMAC covers all chunk lines in order. Replacing any chunk (even with a previously valid chunk from the same file) invalidates the seal, which is verified on every decrypt.
 
 ## Password Requirements
 

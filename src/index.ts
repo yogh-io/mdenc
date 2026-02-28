@@ -5,7 +5,6 @@ export type {
   MdencFile,
   EncryptOptions,
   DecryptOptions,
-  SealResult,
 } from './types.js';
 export { DEFAULT_ARGON2_PARAMS, ChunkingStrategy } from './types.js';
 export { encrypt, decrypt } from './encrypt.js';

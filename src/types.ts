@@ -32,7 +32,7 @@ export interface MdencFile {
   headerLine: string;
   headerHmac: Uint8Array;
   chunks: MdencChunk[];
-  sealHmac?: Uint8Array;   // present only if sealed
+  sealHmac: Uint8Array;    // file-level HMAC
 }
 
 export enum ChunkingStrategy {
@@ -52,7 +52,3 @@ export interface DecryptOptions {
   // Reserved for future options
 }
 
-export interface SealResult {
-  sealed: string;             // the sealed file content
-  hmac: Uint8Array;           // the file-level HMAC
-}

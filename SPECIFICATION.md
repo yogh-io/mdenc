@@ -11,6 +11,7 @@ An mdenc v1 file consists of:
 1. A header line
 2. A header authentication line
 3. One or more encrypted chunk lines
+4. A seal line
 
 All lines are separated by `\n` (LF). The file ends with a trailing `\n`.
 
@@ -45,6 +46,14 @@ Each subsequent line is a single encrypted chunk, base64-encoded without line wr
 ```
 
 The nonce is deterministically derived from the chunk plaintext (see below). The ciphertext and tag are produced by XChaCha20-Poly1305.
+
+### Seal Line
+
+```
+seal_b64=<hmac>
+```
+
+HMAC-SHA256 over the header line, header auth line, and all chunk lines (see Seal below). This line is REQUIRED. It MUST be the last line before the trailing newline.
 
 ## Cryptographic Operations
 
@@ -112,6 +121,21 @@ For each chunk:
 
 After constructing the header line, compute HMAC-SHA256 over the header line bytes (UTF-8, excluding trailing newline) using `header_key`. Output as the `hdrauth_b64` line.
 
+### Seal
+
+After encrypting all chunks, compute HMAC-SHA256 over the concatenation of:
+
+```
+<header_line>\n<auth_line>\n<chunk_lines joined by \n>
+```
+
+keyed with `header_key`. Output as the `seal_b64` line.
+
+The seal is REQUIRED. Encryption always produces a seal, and decryption always verifies it. The seal detects:
+- Chunk reordering
+- Chunk truncation
+- Chunk replacement with older valid ciphertext (rollback)
+
 ## Chunking
 
 ### Paragraph Chunking (Default)
@@ -136,39 +160,29 @@ The invariant `chunks.join('') === original` always holds.
 
 Split at fixed byte boundaries. This has poor diff characteristics for insertions (all subsequent chunks shift) and is not recommended for version-controlled files.
 
+## Encryption
+
+1. Chunk the plaintext
+2. Derive master key, enc_key, header_key, and nonce_key from the password and salt
+3. Serialize the header and compute the header HMAC
+4. Encrypt each chunk with deterministic nonces
+5. Compute the seal HMAC over all preceding lines
+6. Output: header line, header auth line, chunk lines, seal line, trailing newline
+
 ## Decryption
 
 1. Parse the header line to extract salt, file_id, and Argon2id parameters
 2. Derive master key, enc_key, header_key, and nonce_key from the password
 3. Verify the header HMAC; reject if invalid
-4. For each chunk line, decrypt with the file_id-based AAD
-5. Concatenate decrypted chunks to recover the plaintext
+4. Verify the seal HMAC; reject if invalid (detects reorder, truncation, rollback)
+5. Decrypt each chunk with the file_id-based AAD
+6. Concatenate decrypted chunks to recover the plaintext
 
 ## Diff-Friendly Encryption (Content-Addressed)
 
 When re-encrypting a modified file, the encryptor reuses the salt and file_id from the previous encrypted version. Since encryption is deterministic (same plaintext + same keys = same ciphertext), unchanged chunks automatically produce identical ciphertext without any explicit comparison logic. This produces minimal `git diff` output.
 
-Inserting a paragraph between existing paragraphs only adds one new line to the encrypted output; all surrounding chunks remain unchanged because the AAD and nonce derivation are position-independent.
-
-## Seal Operation
-
-The seal operation provides file-level integrity protection for use outside of git (which provides its own content integrity via SHA hashes).
-
-Sealing:
-1. Verify each chunk decrypts successfully (integrity check)
-2. Compute HMAC-SHA256 over the header line, header auth line, and all chunk ciphertext lines (concatenated as `<header_line>\n<auth_line>\n<chunk_lines joined by \n>`), keyed with `header_key`
-3. Append a seal line: `seal_b64=<hmac>`
-
-The seal does NOT re-encrypt chunks. Chunk lines are preserved as-is.
-
-Verification:
-1. Verify the header HMAC
-2. Verify the seal HMAC over the header line, header auth line, and all chunk lines
-
-The seal is optional. Files without a seal line are valid and decrypt normally. The seal detects:
-- Chunk reordering
-- Chunk truncation
-- Chunk replacement with older valid ciphertext (rollback)
+Inserting a paragraph between existing paragraphs only adds one new chunk line to the encrypted output; all surrounding chunks remain unchanged because the AAD and nonce derivation are position-independent. The seal line also changes (since it covers all chunk lines), producing a two-line diff: one new chunk line and an updated seal.
 
 ## Base64 Encoding
 
@@ -179,16 +193,16 @@ All base64-encoded values in mdenc use standard base64 (RFC 4648 Section 4) with
 - **Confidentiality**: XChaCha20-Poly1305 with deterministic nonces
 - **Chunk integrity**: Poly1305 authentication tag per chunk
 - **File binding**: AAD prevents cross-file chunk swapping
+- **File-level integrity**: Seal HMAC detects reorder, truncation, rollback
 - **Header integrity**: HMAC-SHA256 over header
 - **Password stretching**: Argon2id
 - **Key separation**: HKDF produces distinct enc_key, header_key, and nonce_key
-- **File-level integrity** (with seal): HMAC over all lines detects reorder, truncation, rollback
 
 ## Accepted Leakage
 
 The following information is visible in an mdenc file without the password:
 
-- Number of chunks (number of lines minus 2)
+- Number of chunks (number of lines minus 3: header, auth, seal)
 - Approximate size of each chunk (base64 line length)
 - Argon2id parameters
 - The fact that the file is mdenc-encrypted

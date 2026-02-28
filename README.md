@@ -35,9 +35,10 @@ dm54GXdXI+MpbgeCpbUQj9x5HYOvJ/wIIymaQxcwgraQO2lwCYUqfUka...    <- ## Action Item
 2W4gqkAK/b/UD9euXLVE4I27+LnxFHdPr7lQajtI5HxC7eED4YUYtoaG...    <- Alice will draft...
 JQgoywFO02b4OdkZEKhk5ZjpXyLzJCuIFAU6mi73ZazKhy+qw1Drz6k8...    <- ## Budget
 NNdpCjf++ncLe9yrRbotyPUWuib8Oe68xjkaTnEJVNO7snSFS0Z6cGwY...    <- Total allocated...
+seal_b64=K7mQ2xR9f4pVnBt5z8wJH3kY6LdWqA0oNc1iEgMvT+s=
 ```
 
-Each paragraph becomes one line of base64. The file is plain UTF-8 text that git tracks normally.
+Each paragraph becomes one line of base64. A seal HMAC at the end protects the file's integrity. The file is plain UTF-8 text that git tracks normally.
 
 Now you edit the "Action Items" paragraph and re-encrypt. Here's what `git diff` shows:
 
@@ -51,9 +52,11 @@ Now you edit the "Action Items" paragraph and re-encrypt. Here's what `git diff`
 +29eDDzd58m8BtTV3PA3zyetTyuhL3Qqimlz7APvXDZsGL/rtZtld9R0u...
  JQgoywFO02b4OdkZEKhk5ZjpXyLzJCuIFAU6mi73ZazKhy+qw1Drz6k8...
  NNdpCjf++ncLe9yrRbotyPUWuib8Oe68xjkaTnEJVNO7snSFS0Z6cGwY...
+-seal_b64=K7mQ2xR9f4pVnBt5z8wJH3kY6LdWqA0oNc1iEgMvT+s=
++seal_b64=Px8nVdR2aLw0tYj3Km5qFh9sBcW7e6Uo4gZi1DxAf+E=
 ```
 
-One paragraph changed, one line in the diff. Even inserting a new paragraph between existing ones only adds one line -- surrounding chunks stay unchanged. Compare that to GPG, where the entire file would show as changed.
+One paragraph changed, one line in the diff (plus the seal updates). Even inserting a new paragraph between existing ones only adds one line -- surrounding chunks stay unchanged. Compare that to GPG, where the entire file would show as changed.
 
 ## Why
 
@@ -81,8 +84,7 @@ mdenc decrypt notes.mdenc -o notes.md
 # ... edit notes.md ...
 mdenc encrypt notes.md -o notes.mdenc
 
-# Seal for tamper detection outside git
-mdenc seal notes.mdenc
+# Verify file integrity
 mdenc verify notes.mdenc
 ```
 
@@ -91,12 +93,12 @@ Password is read from `MDENC_PASSWORD` env var or prompted interactively (no ech
 ## Library
 
 ```typescript
-import { encrypt, decrypt, seal, verifySeal } from 'mdenc';
+import { encrypt, decrypt, verifySeal } from 'mdenc';
 
-// Encrypt
+// Encrypt (always includes integrity seal)
 const encrypted = await encrypt(markdown, password);
 
-// Decrypt
+// Decrypt (verifies seal automatically)
 const plaintext = await decrypt(encrypted, password);
 
 // Re-encrypt with diff optimization
@@ -104,17 +106,17 @@ const updated = await encrypt(editedMarkdown, password, {
   previousFile: encrypted,
 });
 
-// Seal for integrity outside git
-const sealed = await seal(encrypted, password);
-const ok = await verifySeal(sealed, password);
+// Verify integrity without decrypting
+const ok = await verifySeal(encrypted, password);
 ```
 
 ## How it works
 
 1. Your Markdown is split into chunks at paragraph boundaries (runs of 2+ newlines)
 2. Each chunk is encrypted with XChaCha20-Poly1305 using a deterministic nonce derived from the content
-3. The output is plain UTF-8 text -- one base64 line per chunk
+3. The output is plain UTF-8 text -- one base64 line per chunk, plus a seal HMAC
 4. Same content + same keys = same ciphertext, so unchanged chunks produce identical output and minimal diffs
+5. The seal HMAC covers all lines, detecting reordering, truncation, and rollback on decrypt
 
 The password is stretched with Argon2id (64 MiB, 3 iterations). Keys are derived via HKDF-SHA256 with separate keys for encryption, header authentication, and nonce derivation.
 
