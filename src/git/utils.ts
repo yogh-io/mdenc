@@ -89,7 +89,7 @@ export function gitAdd(repoRoot: string, files: string[]): void {
 
 export function gitRmCached(repoRoot: string, files: string[]): void {
   if (files.length === 0) return;
-  execFileSync('git', ['rm', '--cached', '--', ...files], {
+  execFileSync('git', ['rm', '--cached', '--ignore-unmatch', '--', ...files], {
     cwd: repoRoot,
     stdio: ['pipe', 'pipe', 'pipe'],
   });

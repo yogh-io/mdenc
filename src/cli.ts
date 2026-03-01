@@ -4,6 +4,7 @@ import { verifySeal } from './seal.js';
 import { initCommand, removeHooksCommand } from './git/init.js';
 import { markCommand } from './git/mark.js';
 import { statusCommand } from './git/status.js';
+import { watchCommand } from './git/watch.js';
 import {
   preCommitHook,
   postCheckoutHook,
@@ -103,6 +104,7 @@ Git integration:
   mdenc init                          Set up git hooks for automatic encryption
   mdenc mark <directory>              Mark a directory for encryption
   mdenc status                        Show encryption status
+  mdenc watch                         Watch and encrypt on file changes
   mdenc remove-hooks                  Remove mdenc git hooks`);
   process.exit(1);
 }
@@ -179,6 +181,10 @@ async function main(): Promise<void> {
 
       case 'status':
         statusCommand();
+        break;
+
+      case 'watch':
+        await watchCommand();
         break;
 
       case 'remove-hooks':
