@@ -1,5 +1,6 @@
-import { watch, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { watch } from 'chokidar';
 import { encrypt } from '../encrypt.js';
 import { resolvePassword } from './password.js';
 import { findGitRoot, findMarkedDirs, getMdFilesInDir } from './utils.js';
@@ -29,25 +30,43 @@ export async function watchCommand(): Promise<void> {
     }
   }
 
-  // Watch each marked directory, deduplicating rapid events
+  // Watch each marked directory for .md file changes
   const pending = new Set<string>();
+
+  const watcher = watch(
+    markedDirs.map(dir => join(dir, '*.md')),
+    { ignoreInitial: true, awaitWriteFinish: { stabilityThreshold: 100 } },
+  );
+
+  watcher.on('change', (filePath) => {
+    handleFileEvent(filePath, repoRoot, password, pending);
+  });
+  watcher.on('add', (filePath) => {
+    handleFileEvent(filePath, repoRoot, password, pending);
+  });
 
   for (const dir of markedDirs) {
     const relDir = relative(repoRoot, dir) || '.';
     console.error(`mdenc: watching ${relDir}/`);
-
-    watch(dir, (_event, filename) => {
-      if (!filename || !filename.endsWith('.md')) return;
-      const key = join(dir, filename);
-      if (pending.has(key)) return;
-      pending.add(key);
-      encryptFile(dir, filename, repoRoot, password).finally(() => {
-        pending.delete(key);
-      });
-    });
   }
-
   console.error('mdenc: watching for changes (Ctrl+C to stop)');
+}
+
+function handleFileEvent(
+  filePath: string,
+  repoRoot: string,
+  password: string,
+  pending: Set<string>,
+): void {
+  if (pending.has(filePath)) return;
+  pending.add(filePath);
+
+  const dir = join(filePath, '..');
+  const filename = filePath.slice(dir.length + 1);
+
+  encryptFile(dir, filename, repoRoot, password).finally(() => {
+    pending.delete(filePath);
+  });
 }
 
 async function encryptFile(

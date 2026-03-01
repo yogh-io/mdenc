@@ -53,6 +53,9 @@ export function validateScryptParams(params: ScryptParams): void {
   if (params.N < N.min || params.N > N.max) {
     throw new Error(`Invalid scrypt N: ${params.N} (must be ${N.min}–${N.max})`);
   }
+  if ((params.N & (params.N - 1)) !== 0) {
+    throw new Error(`Invalid scrypt N: ${params.N} (must be a power of 2)`);
+  }
   if (params.r < r.min || params.r > r.max) {
     throw new Error(`Invalid scrypt r: ${params.r} (must be ${r.min}–${r.max})`);
   }

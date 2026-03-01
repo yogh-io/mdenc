@@ -73,6 +73,22 @@ describe('serializeHeader / parseHeader', () => {
     expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} scrypt=N=1024,r=1,p=17`))
       .toThrow('Invalid scrypt p');
   });
+
+  it('rejects scrypt N that is not a power of 2', () => {
+    const salt = 'AAAAAAAAAAAAAAAAAAAAAA==';
+    const fid = 'AAAAAAAAAAAAAAAAAAAAAA==';
+    expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} scrypt=N=1025,r=8,p=1`))
+      .toThrow('must be a power of 2');
+    expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} scrypt=N=3000,r=8,p=1`))
+      .toThrow('must be a power of 2');
+    // Valid powers of 2 should pass
+    expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} scrypt=N=1024,r=8,p=1`))
+      .not.toThrow();
+    expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} scrypt=N=16384,r=8,p=1`))
+      .not.toThrow();
+    expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} scrypt=N=1048576,r=8,p=1`))
+      .not.toThrow();
+  });
 });
 
 describe('authenticateHeader / verifyHeader', () => {

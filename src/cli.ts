@@ -5,6 +5,7 @@ import { initCommand, removeHooksCommand } from './git/init.js';
 import { markCommand } from './git/mark.js';
 import { statusCommand } from './git/status.js';
 import { watchCommand } from './git/watch.js';
+import { genpassCommand } from './git/genpass.js';
 import {
   preCommitHook,
   postCheckoutHook,
@@ -105,7 +106,8 @@ Git integration:
   mdenc mark <directory>              Mark a directory for encryption
   mdenc status                        Show encryption status
   mdenc watch                         Watch and encrypt on file changes
-  mdenc remove-hooks                  Remove mdenc git hooks`);
+  mdenc remove-hooks                  Remove mdenc git hooks
+  mdenc genpass [--force]             Generate a random password into .mdenc-password`);
   process.exit(1);
 }
 
@@ -189,6 +191,10 @@ async function main(): Promise<void> {
 
       case 'remove-hooks':
         removeHooksCommand();
+        break;
+
+      case 'genpass':
+        genpassCommand(args.includes('--force'));
         break;
 
       // Git hook handlers (called by hook scripts, not directly by user)

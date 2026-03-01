@@ -27,15 +27,15 @@ Total allocated: $450k for the quarter.
 `mdenc encrypt notes.md -o notes.mdenc` turns it into:
 
 ```
-mdenc:v1 salt_b64=tWpYJ1TX... file_id_b64=QtPSfysG... argon2=m=65536,t=3,p=1
-hdrauth_b64=2Iox+FH0IuoSHittEzcxSI8Ew7VUJNIBAP+3RKs3TRg=
-u+C4c6fq3ShPpe0nmAdVdB3gt+Jr45rPChOYd8W3W827Hw6ye1tO7eBh...    <- # Meeting Notes
-iFeHLHNGgHT3cBM20/BlPfaDjeY+WL3rZh1unY951Ha/wGHI5D8yYmMi...    <- Discussed the Q3...
-dm54GXdXI+MpbgeCpbUQj9x5HYOvJ/wIIymaQxcwgraQO2lwCYUqfUka...    <- ## Action Items
-2W4gqkAK/b/UD9euXLVE4I27+LnxFHdPr7lQajtI5HxC7eED4YUYtoaG...    <- Alice will draft...
-JQgoywFO02b4OdkZEKhk5ZjpXyLzJCuIFAU6mi73ZazKhy+qw1Drz6k8...    <- ## Budget
-NNdpCjf++ncLe9yrRbotyPUWuib8Oe68xjkaTnEJVNO7snSFS0Z6cGwY...    <- Total allocated...
-seal_b64=K7mQ2xR9f4pVnBt5z8wJH3kY6LdWqA0oNc1iEgMvT+s=
+mdenc:v1 salt_b64=1z94qTI8... file_id_b64=eLP+c5cP... scrypt=N=16384,r=8,p=1
+hdrauth_b64=griicznFYhBTVCeq1lpvB+J73wsJJbheGghxNOIJlu0=
+Qnp4sPf/aN1z/VSkZ8yjGWwk0ZLqwpFAJBzbLOcoKyafqUbMp4Y7WMqF...    <- # Meeting Notes
+nD1KIHOMX5VhlSU4USUxWHTrl2Qi6cev/b6J5YJR9C78XHqwnNHVxHgW...    <- Discussed the Q3...
+Hes/oW+FeONHytgUa7c9ZzdF4d/w7Ei0tnGiJmqPX0DniJaiV0g0yMhc...    <- ## Action Items
+yT7vkHbaXHR390bWz1d/qcK6yVeF3p5/quvW7BOx4hfoU0F2P0/oNAkR...    <- Alice will draft...
+dkM7awElU/pfUYs1goxQFlgcyUq8FNHcnZrU76tPaygh7bdgYjdrC7Wx...    <- ## Budget
+ZBRV9kdXm7gNiF4BvI9eklrtTjhkI9tLHu001eQUevoZbeKQ8Y70basB...    <- Total allocated...
+seal_b64=29ylXnDTWQ09nzZjvoYtYUpfyr4X4NLONxpT/HOC9TU=
 ```
 
 Each paragraph becomes one line of base64. A seal HMAC at the end protects the file's integrity. The file is plain UTF-8 text that git tracks normally.
@@ -43,17 +43,17 @@ Each paragraph becomes one line of base64. A seal HMAC at the end protects the f
 Now you edit the "Action Items" paragraph and re-encrypt. Here's what `git diff` shows:
 
 ```diff
- mdenc:v1 salt_b64=tWpYJ1TX... file_id_b64=QtPSfysG... argon2=m=65536,t=3,p=1
- hdrauth_b64=2Iox+FH0IuoSHittEzcxSI8Ew7VUJNIBAP+3RKs3TRg=
- u+C4c6fq3ShPpe0nmAdVdB3gt+Jr45rPChOYd8W3W827Hw6ye1tO7eBh...
- iFeHLHNGgHT3cBM20/BlPfaDjeY+WL3rZh1unY951Ha/wGHI5D8yYmMi...
- dm54GXdXI+MpbgeCpbUQj9x5HYOvJ/wIIymaQxcwgraQO2lwCYUqfUka...
--2W4gqkAK/b/UD9euXLVE4I27+LnxFHdPr7lQajtI5HxC7eED4YUYtoaG...
-+29eDDzd58m8BtTV3PA3zyetTyuhL3Qqimlz7APvXDZsGL/rtZtld9R0u...
- JQgoywFO02b4OdkZEKhk5ZjpXyLzJCuIFAU6mi73ZazKhy+qw1Drz6k8...
- NNdpCjf++ncLe9yrRbotyPUWuib8Oe68xjkaTnEJVNO7snSFS0Z6cGwY...
--seal_b64=K7mQ2xR9f4pVnBt5z8wJH3kY6LdWqA0oNc1iEgMvT+s=
-+seal_b64=Px8nVdR2aLw0tYj3Km5qFh9sBcW7e6Uo4gZi1DxAf+E=
+ mdenc:v1 salt_b64=1z94qTI8... file_id_b64=eLP+c5cP... scrypt=N=16384,r=8,p=1
+ hdrauth_b64=griicznFYhBTVCeq1lpvB+J73wsJJbheGghxNOIJlu0=
+ Qnp4sPf/aN1z/VSkZ8yjGWwk0ZLqwpFAJBzbLOcoKyafqUbMp4Y7WMqF...
+ nD1KIHOMX5VhlSU4USUxWHTrl2Qi6cev/b6J5YJR9C78XHqwnNHVxHgW...
+ Hes/oW+FeONHytgUa7c9ZzdF4d/w7Ei0tnGiJmqPX0DniJaiV0g0yMhc...
+-yT7vkHbaXHR390bWz1d/qcK6yVeF3p5/quvW7BOx4hfoU0F2P0/oNAkR...
++1RgyC3rXcjykvoL0GgsQsHBmxy5axdD/tqMnicJGjit66+o5bjP1vSbG...
+ dkM7awElU/pfUYs1goxQFlgcyUq8FNHcnZrU76tPaygh7bdgYjdrC7Wx...
+ ZBRV9kdXm7gNiF4BvI9eklrtTjhkI9tLHu001eQUevoZbeKQ8Y70basB...
+-seal_b64=29ylXnDTWQ09nzZjvoYtYUpfyr4X4NLONxpT/HOC9TU=
++seal_b64=iNhYjNp69tyv4tkzgDJK5Fh2h1WLgIs3Y1IPRKcpQsE=
 ```
 
 One paragraph changed, one line in the diff (plus the seal updates). Even inserting a new paragraph between existing ones only adds one line -- surrounding chunks stay unchanged. Compare that to GPG, where the entire file would show as changed.
@@ -90,6 +90,32 @@ mdenc verify notes.mdenc
 
 Password is read from `MDENC_PASSWORD` env var or prompted interactively (no echo).
 
+## Git Integration
+
+mdenc can automatically encrypt and decrypt files as part of your git workflow.
+
+```bash
+# Set up git hooks (pre-commit, post-checkout, post-merge, post-rewrite)
+mdenc init
+
+# Generate a random password into .mdenc-password
+mdenc genpass
+
+# Mark a directory -- .md files inside will be encrypted on commit
+mdenc mark docs/private
+
+# See which files need encryption/decryption
+mdenc status
+
+# Watch for changes and encrypt on save
+mdenc watch
+
+# Remove mdenc hooks from the repository
+mdenc remove-hooks
+```
+
+After `mdenc init` and `mdenc mark`, the workflow is automatic: edit `.md` files normally, and the pre-commit hook encrypts them to `.mdenc` before each commit. Post-checkout and post-merge hooks decrypt them back after switching branches or pulling.
+
 ## Library
 
 ```typescript
@@ -118,7 +144,7 @@ const ok = await verifySeal(encrypted, password);
 4. Same content + same keys = same ciphertext, so unchanged chunks produce identical output and minimal diffs
 5. The seal HMAC covers all lines, detecting reordering, truncation, and rollback on decrypt
 
-The password is stretched with Argon2id (64 MiB, 3 iterations). Keys are derived via HKDF-SHA256 with separate keys for encryption, header authentication, and nonce derivation.
+The password is stretched with scrypt (N=16384, r=8, p=1). Keys are derived via HKDF-SHA256 with separate keys for encryption, header authentication, and nonce derivation.
 
 ## What leaks
 

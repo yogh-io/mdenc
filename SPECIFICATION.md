@@ -18,16 +18,16 @@ All lines are separated by `\n` (LF). The file ends with a trailing `\n`.
 ### Header Line
 
 ```
-mdenc:v1 salt_b64=<salt> file_id_b64=<file_id> argon2=m=<memory>,t=<iterations>,p=<parallelism>
+mdenc:v1 salt_b64=<salt> file_id_b64=<file_id> scrypt=N=<N>,r=<r>,p=<p>
 ```
 
 Fields (space-separated key=value pairs after the version tag):
 
 - `salt_b64`: 16-byte random salt, base64-encoded (no line wrapping)
 - `file_id_b64`: 16-byte random file identifier, base64-encoded (no line wrapping)
-- `argon2`: Argon2id parameters in the format `m=<memory_kib>,t=<iterations>,p=<parallelism>`
+- `scrypt`: scrypt parameters in the format `N=<N>,r=<r>,p=<p>` where N must be a power of 2
 
-Default Argon2id parameters: `m=65536,t=3,p=1` (64 MiB memory, 3 iterations, 1 lane).
+Default scrypt parameters: `N=16384,r=8,p=1` (~16 MiB memory with r=8).
 
 ### Header Authentication Line
 
@@ -59,11 +59,11 @@ HMAC-SHA256 over the header line, header auth line, and all chunk lines (see Sea
 
 ### Password Normalization
 
-Passwords MUST be normalized to Unicode NFKC form before use. This is REQUIRED, not optional. The normalized password is then UTF-8 encoded for use as the Argon2id input.
+Passwords MUST be normalized to Unicode NFKC form before use. This is REQUIRED, not optional. The normalized password is then UTF-8 encoded for use as the scrypt input.
 
 ### Key Derivation
 
-1. **Master key**: Derive a 32-byte master key from the NFKC-normalized password and salt using Argon2id with the parameters from the header.
+1. **Master key**: Derive a 32-byte master key from the NFKC-normalized password and salt using scrypt with the parameters from the header.
 
 2. **Encryption key** (`enc_key`): Derive from master key using HKDF-SHA256 with:
    - IKM: master key
@@ -171,7 +171,7 @@ Split at fixed byte boundaries. This has poor diff characteristics for insertion
 
 ## Decryption
 
-1. Parse the header line to extract salt, file_id, and Argon2id parameters
+1. Parse the header line to extract salt, file_id, and scrypt parameters
 2. Derive master key, enc_key, header_key, and nonce_key from the password
 3. Verify the header HMAC; reject if invalid
 4. Verify the seal HMAC; reject if invalid (detects reorder, truncation, rollback)
@@ -195,7 +195,7 @@ All base64-encoded values in mdenc use standard base64 (RFC 4648 Section 4) with
 - **File binding**: AAD prevents cross-file chunk swapping
 - **File-level integrity**: Seal HMAC detects reorder, truncation, rollback
 - **Header integrity**: HMAC-SHA256 over header
-- **Password stretching**: Argon2id
+- **Password stretching**: scrypt (memory-hard)
 - **Key separation**: HKDF produces distinct enc_key, header_key, and nonce_key
 
 ## Accepted Leakage
@@ -204,6 +204,6 @@ The following information is visible in an mdenc file without the password:
 
 - Number of chunks (number of lines minus 3: header, auth, seal)
 - Approximate size of each chunk (base64 line length)
-- Argon2id parameters
+- Scrypt parameters
 - The fact that the file is mdenc-encrypted
 - Identical paragraphs produce identical ciphertext (reveals repeated content within a file)

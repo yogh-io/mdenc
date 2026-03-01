@@ -18,7 +18,7 @@ The attacker cannot:
 | Purpose | Primitive | Parameters |
 |---------|-----------|------------|
 | Encryption | XChaCha20-Poly1305 | 256-bit key, 192-bit nonce |
-| KDF | Argon2id | 64 MiB, 3 iterations, 1 lane |
+| KDF | scrypt | N=16384, r=8, p=1 (default) |
 | Key derivation | HKDF-SHA256 | Separate info strings per key |
 | Nonce derivation | HMAC-SHA256 | Truncated to 24 bytes |
 | Header auth | HMAC-SHA256 | Keyed with header_key |
@@ -46,7 +46,7 @@ mdenc uses deterministic nonces derived via `HMAC-SHA256(nonce_key, plaintext)`,
 Deterministic encryption with XChaCha20-Poly1305 is safe here because:
 
 1. The nonce is derived from both the key material (`nonce_key`) and the plaintext via HMAC-SHA256, which is a PRF. An attacker without the key cannot predict or control nonces.
-2. Each file has a unique `nonce_key` (derived from a unique salt via Argon2id + HKDF). Nonce reuse across files is not a concern.
+2. Each file has a unique `nonce_key` (derived from a unique salt via scrypt + HKDF). Nonce reuse across files is not a concern.
 3. Within a file, identical plaintext chunks intentionally produce identical ciphertext. This is accepted leakage (see below).
 4. The 24-byte nonce space (192 bits) provides ample collision resistance even for large documents.
 
@@ -61,7 +61,7 @@ The AAD binds each chunk to its version and file identity:
 - **File ID binding**: A random 16-byte file ID prevents swapping chunks between files
 
 ### Header Authentication
-The header HMAC prevents tampering with algorithm parameters (e.g., downgrading Argon2id cost).
+The header HMAC prevents tampering with algorithm parameters (e.g., downgrading scrypt cost).
 
 ### Seal (File-Level Integrity)
 Every mdenc file includes a seal: an HMAC-SHA256 over the header line, header auth line, and all chunk lines, keyed with `header_key`. The seal is always present -- encryption always produces it, and decryption always verifies it.
@@ -82,7 +82,7 @@ mdenc intentionally leaks the following metadata (this is inherent to the diff-f
 - **Edit patterns**: When a paragraph changes, its chunk line changes in git diff
 - **Which paragraphs changed**: Unchanged paragraphs have identical ciphertext
 - **Identical paragraphs**: Within a file, identical plaintext produces identical ciphertext, revealing repeated content
-- **Argon2id parameters**: Stored in plaintext header
+- **Scrypt parameters**: Stored in plaintext header
 
 This leakage is accepted because the primary use case values diff-friendliness over metadata hiding.
 
@@ -100,11 +100,11 @@ The seal HMAC covers all chunk lines in order. Replacing any chunk (even with a 
 
 ## Password Requirements
 
-mdenc uses Argon2id for password stretching, which provides:
+mdenc uses scrypt for password stretching, which provides:
 - Memory-hard computation (resists GPU/ASIC attacks)
-- Resistance to side-channel attacks (hybrid construction)
+- Time-hard computation (sequential memory access pattern)
 
-The default parameters (64 MiB, 3 iterations) are suitable for interactive use. Users with higher security requirements can increase these parameters.
+The default parameters (N=16384, r=8, p=1, ~16 MiB memory) are suitable for interactive use. Users with higher security requirements can increase these parameters.
 
 Passwords are NFKC-normalized before use to ensure consistent key derivation across platforms and input methods.
 
@@ -112,7 +112,6 @@ Passwords are NFKC-normalized before use to ensure consistent key derivation acr
 
 mdenc uses no native dependencies:
 - `@noble/ciphers` — XChaCha20-Poly1305 (audited, pure JS)
-- `@noble/hashes` — HKDF-SHA256, HMAC-SHA256 (audited, pure JS)
-- `hash-wasm` — Argon2id (WASM, portable)
+- `@noble/hashes` — scrypt, HKDF-SHA256, HMAC-SHA256 (audited, pure JS)
 
 This avoids `node-gyp` compilation issues and supply chain risks from native modules.
