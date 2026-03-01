@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-export const CLI = join(import.meta.dirname, '..', '..', 'bin', 'mdenc');
+export const CLI = join(import.meta.dirname, '..', '..', 'dist', 'cli.js');
 export const PASSWORD = 'test-password';
 
 export interface TempGitRepo {

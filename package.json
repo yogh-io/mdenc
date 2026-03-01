@@ -19,11 +19,10 @@
     }
   },
   "bin": {
-    "mdenc": "./bin/mdenc"
+    "mdenc": "./dist/cli.js"
   },
   "files": [
-    "dist",
-    "bin"
+    "dist"
   ],
   "scripts": {
     "build": "bun x tsup",

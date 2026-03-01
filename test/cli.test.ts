@@ -4,7 +4,7 @@ import { writeFileSync, readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-const CLI = join(import.meta.dirname, '..', 'bin', 'mdenc');
+const CLI = join(import.meta.dirname, '..', 'dist', 'cli.js');
 const PASSWORD = 'test-password';
 
 function run(args: string[], env?: Record<string, string>): string {
