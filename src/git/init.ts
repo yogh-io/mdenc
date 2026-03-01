@@ -132,9 +132,9 @@ export async function initCommand(): Promise<void> {
 
   // Decrypt existing .mdenc files
   const { decryptAll } = await import('./hooks.js');
-  const count = await decryptAll();
-  if (count > 0) {
-    console.log(`Decrypted ${count} existing file(s)`);
+  const { decrypted } = await decryptAll();
+  if (decrypted > 0) {
+    console.log(`Decrypted ${decrypted} existing file(s)`);
   }
 
   console.log('mdenc git integration initialized.');

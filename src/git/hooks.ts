@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, statSync, unlinkSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { encrypt, decrypt } from '../encrypt.js';
 import { resolvePassword } from './password.js';
@@ -99,11 +99,11 @@ export async function preCommitHook(): Promise<void> {
 }
 
 /**
- * Decrypt all .mdenc files in marked directories.
- * Shared logic for post-checkout, post-merge, and post-rewrite hooks.
- * Returns the number of files decrypted.
+ * Decrypt all .mdenc files in marked directories, then clean up
+ * orphaned .md files (those without a corresponding .mdenc).
+ * Returns { decrypted, cleaned } counts.
  */
-export async function decryptAll(): Promise<number> {
+export async function decryptAll(): Promise<{ decrypted: number; cleaned: number }> {
   const repoRoot = findGitRoot();
   const password = resolvePassword(repoRoot);
 
@@ -111,11 +111,11 @@ export async function decryptAll(): Promise<number> {
     process.stderr.write(
       'mdenc: no password available. Skipping decryption.\n',
     );
-    return 0;
+    return { decrypted: 0, cleaned: 0 };
   }
 
   const markedDirs = findMarkedDirs(repoRoot);
-  let count = 0;
+  let decrypted = 0;
 
   for (const dir of markedDirs) {
     const mdencFiles = getMdencFilesInDir(dir);
@@ -141,7 +141,7 @@ export async function decryptAll(): Promise<number> {
         const encrypted = readFileSync(mdencPath, 'utf-8');
         const plaintext = await decrypt(encrypted, password);
         writeFileSync(mdPath, plaintext);
-        count++;
+        decrypted++;
       } catch (err) {
         process.stderr.write(
           `mdenc: failed to decrypt ${relative(repoRoot, mdencPath)}: ${err instanceof Error ? err.message : err}\n`,
@@ -150,29 +150,51 @@ export async function decryptAll(): Promise<number> {
     }
   }
 
-  return count;
+  // Clean up orphaned .md files (no corresponding .mdenc)
+  let cleaned = 0;
+  for (const dir of markedDirs) {
+    const mdFiles = getMdFilesInDir(dir);
+
+    for (const mdFile of mdFiles) {
+      const mdPath = join(dir, mdFile);
+      const mdencPath = mdPath.replace(/\.md$/, '.mdenc');
+
+      if (!existsSync(mdencPath)) {
+        const relMdPath = relative(repoRoot, mdPath);
+        unlinkSync(mdPath);
+        process.stderr.write(`mdenc: removed orphaned ${relMdPath}\n`);
+        cleaned++;
+      }
+    }
+  }
+
+  return { decrypted, cleaned };
+}
+
+function formatDecryptResult({ decrypted, cleaned }: { decrypted: number; cleaned: number }): string {
+  const parts: string[] = [];
+  if (decrypted > 0) parts.push(`decrypted ${decrypted} file(s)`);
+  if (cleaned > 0) parts.push(`removed ${cleaned} orphan(s)`);
+  return parts.length > 0 ? `mdenc: ${parts.join(', ')}\n` : '';
 }
 
 export async function postCheckoutHook(): Promise<void> {
-  const count = await decryptAll();
-  if (count > 0) {
-    process.stderr.write(`mdenc: decrypted ${count} file(s)\n`);
-  }
+  const result = await decryptAll();
+  const msg = formatDecryptResult(result);
+  if (msg) process.stderr.write(msg);
   process.exit(0);
 }
 
 export async function postMergeHook(): Promise<void> {
-  const count = await decryptAll();
-  if (count > 0) {
-    process.stderr.write(`mdenc: decrypted ${count} file(s)\n`);
-  }
+  const result = await decryptAll();
+  const msg = formatDecryptResult(result);
+  if (msg) process.stderr.write(msg);
   process.exit(0);
 }
 
 export async function postRewriteHook(): Promise<void> {
-  const count = await decryptAll();
-  if (count > 0) {
-    process.stderr.write(`mdenc: decrypted ${count} file(s)\n`);
-  }
+  const result = await decryptAll();
+  const msg = formatDecryptResult(result);
+  if (msg) process.stderr.write(msg);
   process.exit(0);
 }

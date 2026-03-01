@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'bun:test';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createTempGitRepo, mdenc, mdencStderr, git, PASSWORD, type TempGitRepo } from './helpers.js';
 
@@ -199,5 +199,47 @@ describe('post-checkout hook (decryptAll)', () => {
 
     // .md should still have the local modification
     expect(readFileSync(join(dir, 'test.md'), 'utf-8')).toBe('# Modified locally\n');
+  });
+
+  it('removes orphaned .md files when .mdenc is deleted', () => {
+    repo = createTempGitRepo();
+    const dir = join(repo.path, 'notes');
+    mkdirSync(dir);
+
+    mdenc(repo.path, ['mark', dir]);
+    git(repo.path, ['commit', '-m', 'mark']);
+
+    // Create and encrypt a file
+    writeFileSync(join(dir, 'test.md'), '# Hello\n\nWorld.\n');
+    mdenc(repo.path, ['pre-commit']);
+    expect(existsSync(join(dir, 'test.mdenc'))).toBe(true);
+
+    // Simulate branch switch: .mdenc removed by git, .md left behind
+    unlinkSync(join(dir, 'test.mdenc'));
+
+    const { stderr } = mdencStderr(repo.path, ['post-checkout']);
+    expect(stderr).toContain('removed 1 orphan(s)');
+
+    // .md should be cleaned up
+    expect(existsSync(join(dir, 'test.md'))).toBe(false);
+  });
+
+  it('does not touch orphaned .md files in unmarked directories', () => {
+    repo = createTempGitRepo();
+    const markedDir = join(repo.path, 'private');
+    const plainDir = join(repo.path, 'public');
+    mkdirSync(markedDir);
+    mkdirSync(plainDir);
+
+    mdenc(repo.path, ['mark', markedDir]);
+    git(repo.path, ['commit', '-m', 'mark']);
+
+    // Put a lone .md in the unmarked directory (no .mdenc)
+    writeFileSync(join(plainDir, 'readme.md'), '# README\n');
+
+    mdenc(repo.path, ['post-checkout']);
+
+    // The .md in the unmarked dir should still exist
+    expect(existsSync(join(plainDir, 'readme.md'))).toBe(true);
   });
 });
