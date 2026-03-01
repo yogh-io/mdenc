@@ -26,7 +26,7 @@ export async function verifySeal(
   const headerHmac = fromBase64(authMatch[1]);
 
   // Derive keys
-  const masterKey = await deriveMasterKey(password, header.salt, header.argon2);
+  const masterKey = deriveMasterKey(password, header.salt, header.scrypt);
   const { headerKey, nonceKey } = deriveKeys(masterKey);
 
   try {

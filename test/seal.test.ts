@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'bun:test';
 import { encrypt, decrypt } from '../src/encrypt.js';
 import { verifySeal } from '../src/seal.js';
-import { TEST_PASSWORD, FAST_ARGON2 } from './helpers.js';
+import { TEST_PASSWORD, FAST_SCRYPT } from './helpers.js';
 
-const opts = { argon2: FAST_ARGON2 };
+const opts = { scrypt: FAST_SCRYPT };
 
 describe('seal (built into encrypt)', () => {
   it('encrypt always includes seal line', async () => {

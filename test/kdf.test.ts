@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
 import { normalizePassword, deriveMasterKey, deriveKeys } from '../src/kdf.js';
-import { TEST_PASSWORD, WRONG_PASSWORD, FAST_ARGON2 } from './helpers.js';
+import { TEST_PASSWORD, WRONG_PASSWORD, FAST_SCRYPT } from './helpers.js';
 
 describe('normalizePassword', () => {
   it('normalizes NFKC (composed vs decomposed)', () => {
@@ -22,32 +22,32 @@ describe('normalizePassword', () => {
 describe('deriveMasterKey', () => {
   const salt = new Uint8Array(16).fill(0x42);
 
-  it('produces deterministic output', async () => {
-    const key1 = await deriveMasterKey(TEST_PASSWORD, salt, FAST_ARGON2);
-    const key2 = await deriveMasterKey(TEST_PASSWORD, salt, FAST_ARGON2);
+  it('produces deterministic output', () => {
+    const key1 = deriveMasterKey(TEST_PASSWORD, salt, FAST_SCRYPT);
+    const key2 = deriveMasterKey(TEST_PASSWORD, salt, FAST_SCRYPT);
     expect(Buffer.from(key1).toString('hex')).toBe(
       Buffer.from(key2).toString('hex'),
     );
   });
 
-  it('different passwords produce different keys', async () => {
-    const key1 = await deriveMasterKey(TEST_PASSWORD, salt, FAST_ARGON2);
-    const key2 = await deriveMasterKey(WRONG_PASSWORD, salt, FAST_ARGON2);
+  it('different passwords produce different keys', () => {
+    const key1 = deriveMasterKey(TEST_PASSWORD, salt, FAST_SCRYPT);
+    const key2 = deriveMasterKey(WRONG_PASSWORD, salt, FAST_SCRYPT);
     expect(Buffer.from(key1).toString('hex')).not.toBe(
       Buffer.from(key2).toString('hex'),
     );
   });
 
-  it('key is 32 bytes', async () => {
-    const key = await deriveMasterKey(TEST_PASSWORD, salt, FAST_ARGON2);
+  it('key is 32 bytes', () => {
+    const key = deriveMasterKey(TEST_PASSWORD, salt, FAST_SCRYPT);
     expect(key.length).toBe(32);
   });
 });
 
 describe('deriveKeys', () => {
-  it('produces three distinct 32-byte keys', async () => {
+  it('produces three distinct 32-byte keys', () => {
     const salt = new Uint8Array(16).fill(0x42);
-    const masterKey = await deriveMasterKey(TEST_PASSWORD, salt, FAST_ARGON2);
+    const masterKey = deriveMasterKey(TEST_PASSWORD, salt, FAST_SCRYPT);
     const { encKey, headerKey, nonceKey } = deriveKeys(masterKey);
 
     expect(encKey.length).toBe(32);

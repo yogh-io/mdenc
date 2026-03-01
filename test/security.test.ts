@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'bun:test';
 import { encrypt, decrypt } from '../src/encrypt.js';
-import { TEST_PASSWORD, FAST_ARGON2 } from './helpers.js';
+import { TEST_PASSWORD, FAST_SCRYPT } from './helpers.js';
 
-const opts = { argon2: FAST_ARGON2 };
+const opts = { scrypt: FAST_SCRYPT };
 
 describe('attack scenarios', () => {
   it('cross-file chunk swap', async () => {
@@ -54,7 +54,7 @@ describe('attack scenarios', () => {
     const encrypted = await encrypt('hello', TEST_PASSWORD, opts);
 
     const lines = encrypted.split('\n');
-    lines[0] = lines[0].replace(/m=\d+/, 'm=2048');
+    lines[0] = lines[0].replace(/N=\d+/, 'N=2048');
     const tampered = lines.join('\n');
 
     await expect(decrypt(tampered, TEST_PASSWORD)).rejects.toThrow(
@@ -62,15 +62,15 @@ describe('attack scenarios', () => {
     );
   });
 
-  it('rejects Argon2 parameter DoS (extreme values)', async () => {
+  it('rejects scrypt parameter DoS (extreme values)', async () => {
     const encrypted = await encrypt('hello', TEST_PASSWORD, opts);
 
     const lines = encrypted.split('\n');
-    lines[0] = lines[0].replace(/m=\d+/, 'm=999999999');
+    lines[0] = lines[0].replace(/N=\d+/, 'N=999999999');
     const tampered = lines.join('\n');
 
     await expect(decrypt(tampered, TEST_PASSWORD)).rejects.toThrow(
-      'Invalid Argon2 memory',
+      'Invalid scrypt N',
     );
   });
 

@@ -1,11 +1,11 @@
 export const TEST_PASSWORD = 'correct-horse-battery-staple';
 export const WRONG_PASSWORD = 'wrong-password-guess';
 
-// Fast Argon2 params for tests (avoid slow KDF in test suite)
-export const FAST_ARGON2 = {
-  memory: 1024,    // 1 MiB
-  iterations: 1,
-  parallelism: 1,
+// Fast scrypt params for tests (avoid slow KDF in test suite)
+export const FAST_SCRYPT = {
+  N: 1024,
+  r: 1,
+  p: 1,
 };
 
 export const SIMPLE_MARKDOWN = `# Hello World

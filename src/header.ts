@@ -1,8 +1,8 @@
 import { hmac } from '@noble/hashes/hmac';
 import { sha256 } from '@noble/hashes/sha256';
 import { randomBytes } from '@noble/ciphers/webcrypto';
-import type { MdencHeader, Argon2Params } from './types.js';
-import { DEFAULT_ARGON2_PARAMS, ARGON2_BOUNDS } from './types.js';
+import type { MdencHeader, ScryptParams } from './types.js';
+import { SCRYPT_BOUNDS } from './types.js';
 import { constantTimeEqual } from './crypto-utils.js';
 
 export function generateSalt(): Uint8Array {
@@ -16,8 +16,8 @@ export function generateFileId(): Uint8Array {
 export function serializeHeader(header: MdencHeader): string {
   const saltB64 = toBase64(header.salt);
   const fileIdB64 = toBase64(header.fileId);
-  const { memory, iterations, parallelism } = header.argon2;
-  return `mdenc:v1 salt_b64=${saltB64} file_id_b64=${fileIdB64} argon2=m=${memory},t=${iterations},p=${parallelism}`;
+  const { N, r, p } = header.scrypt;
+  return `mdenc:v1 salt_b64=${saltB64} file_id_b64=${fileIdB64} scrypt=N=${N},r=${r},p=${p}`;
 }
 
 export function parseHeader(line: string): MdencHeader {
@@ -35,29 +35,29 @@ export function parseHeader(line: string): MdencHeader {
   const fileId = fromBase64(fileIdMatch[1]);
   if (fileId.length !== 16) throw new Error('Invalid header: file_id must be 16 bytes');
 
-  const argonMatch = line.match(/argon2=m=(\d+),t=(\d+),p=(\d+)/);
-  if (!argonMatch) throw new Error('Invalid header: missing argon2 parameters');
-  const argon2: Argon2Params = {
-    memory: parseInt(argonMatch[1], 10),
-    iterations: parseInt(argonMatch[2], 10),
-    parallelism: parseInt(argonMatch[3], 10),
+  const scryptMatch = line.match(/scrypt=N=(\d+),r=(\d+),p=(\d+)/);
+  if (!scryptMatch) throw new Error('Invalid header: missing scrypt parameters');
+  const scryptParams: ScryptParams = {
+    N: parseInt(scryptMatch[1], 10),
+    r: parseInt(scryptMatch[2], 10),
+    p: parseInt(scryptMatch[3], 10),
   };
 
-  validateArgon2Params(argon2);
+  validateScryptParams(scryptParams);
 
-  return { version: 'v1', salt, fileId, argon2 };
+  return { version: 'v1', salt, fileId, scrypt: scryptParams };
 }
 
-export function validateArgon2Params(params: Argon2Params): void {
-  const { memory, iterations, parallelism } = ARGON2_BOUNDS;
-  if (params.memory < memory.min || params.memory > memory.max) {
-    throw new Error(`Invalid Argon2 memory: ${params.memory} KiB (must be ${memory.min}–${memory.max})`);
+export function validateScryptParams(params: ScryptParams): void {
+  const { N, r, p } = SCRYPT_BOUNDS;
+  if (params.N < N.min || params.N > N.max) {
+    throw new Error(`Invalid scrypt N: ${params.N} (must be ${N.min}–${N.max})`);
   }
-  if (params.iterations < iterations.min || params.iterations > iterations.max) {
-    throw new Error(`Invalid Argon2 iterations: ${params.iterations} (must be ${iterations.min}–${iterations.max})`);
+  if (params.r < r.min || params.r > r.max) {
+    throw new Error(`Invalid scrypt r: ${params.r} (must be ${r.min}–${r.max})`);
   }
-  if (params.parallelism < parallelism.min || params.parallelism > parallelism.max) {
-    throw new Error(`Invalid Argon2 parallelism: ${params.parallelism} (must be ${parallelism.min}–${parallelism.max})`);
+  if (params.p < p.min || params.p > p.max) {
+    throw new Error(`Invalid scrypt p: ${params.p} (must be ${p.min}–${p.max})`);
   }
 }
 

@@ -1,8 +1,8 @@
 import { hkdf } from '@noble/hashes/hkdf';
 import { sha256 } from '@noble/hashes/sha256';
-import { argon2id } from 'hash-wasm';
-import type { Argon2Params } from './types.js';
-import { DEFAULT_ARGON2_PARAMS } from './types.js';
+import { scrypt } from '@noble/hashes/scrypt';
+import type { ScryptParams } from './types.js';
+import { DEFAULT_SCRYPT_PARAMS } from './types.js';
 import { zeroize } from './crypto-utils.js';
 
 const ENC_INFO = new TextEncoder().encode('mdenc-v1-enc');
@@ -14,23 +14,19 @@ export function normalizePassword(password: string): Uint8Array {
   return new TextEncoder().encode(normalized);
 }
 
-export async function deriveMasterKey(
+export function deriveMasterKey(
   password: string,
   salt: Uint8Array,
-  params: Argon2Params = DEFAULT_ARGON2_PARAMS,
-): Promise<Uint8Array> {
+  params: ScryptParams = DEFAULT_SCRYPT_PARAMS,
+): Uint8Array {
   const passwordBytes = normalizePassword(password);
   try {
-    const hashHex = await argon2id({
-      password: passwordBytes,
-      salt,
-      parallelism: params.parallelism,
-      iterations: params.iterations,
-      memorySize: params.memory,
-      hashLength: 32,
-      outputType: 'hex',
+    return scrypt(passwordBytes, salt, {
+      N: params.N,
+      r: params.r,
+      p: params.p,
+      dkLen: 32,
     });
-    return hexToBytes(hashHex);
   } finally {
     zeroize(passwordBytes);
   }
@@ -41,12 +37,4 @@ export function deriveKeys(masterKey: Uint8Array): { encKey: Uint8Array; headerK
   const headerKey = hkdf(sha256, masterKey, undefined, HDR_INFO, 32);
   const nonceKey = hkdf(sha256, masterKey, undefined, NONCE_INFO, 32);
   return { encKey, headerKey, nonceKey };
-}
-
-function hexToBytes(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-  }
-  return bytes;
 }

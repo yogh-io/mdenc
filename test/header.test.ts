@@ -8,7 +8,7 @@ import {
   generateFileId,
 } from '../src/header.js';
 import { randomBytes } from '@noble/ciphers/webcrypto';
-import { DEFAULT_ARGON2_PARAMS } from '../src/types.js';
+import { DEFAULT_SCRYPT_PARAMS } from '../src/types.js';
 import type { MdencHeader } from '../src/types.js';
 
 function makeHeader(): MdencHeader {
@@ -16,7 +16,7 @@ function makeHeader(): MdencHeader {
     version: 'v1',
     salt: generateSalt(),
     fileId: generateFileId(),
-    argon2: DEFAULT_ARGON2_PARAMS,
+    scrypt: DEFAULT_SCRYPT_PARAMS,
   };
 }
 
@@ -32,7 +32,7 @@ describe('serializeHeader / parseHeader', () => {
     expect(Buffer.from(parsed.fileId).toString('hex')).toBe(
       Buffer.from(original.fileId).toString('hex'),
     );
-    expect(parsed.argon2).toEqual(original.argon2);
+    expect(parsed.scrypt).toEqual(original.scrypt);
   });
 
   it('all required fields present in serialized output', () => {
@@ -41,37 +41,37 @@ describe('serializeHeader / parseHeader', () => {
     expect(line).toContain('mdenc:v1');
     expect(line).toContain('salt_b64=');
     expect(line).toContain('file_id_b64=');
-    expect(line).toContain('argon2=');
+    expect(line).toContain('scrypt=');
   });
 
   it('invalid headers produce clear errors', () => {
     expect(() => parseHeader('not a header')).toThrow('missing mdenc:v1');
-    expect(() => parseHeader('mdenc:v1 file_id_b64=AAAA argon2=m=1024,t=1,p=1')).toThrow('missing salt_b64');
-    expect(() => parseHeader('mdenc:v1 salt_b64=AAAAAAAAAAAAAAAAAAAAAA== argon2=m=1024,t=1,p=1')).toThrow('missing file_id_b64');
-    expect(() => parseHeader('mdenc:v1 salt_b64=AAAAAAAAAAAAAAAAAAAAAA== file_id_b64=AAAAAAAAAAAAAAAAAAAAAA==')).toThrow('missing argon2');
+    expect(() => parseHeader('mdenc:v1 file_id_b64=AAAA scrypt=N=1024,r=1,p=1')).toThrow('missing salt_b64');
+    expect(() => parseHeader('mdenc:v1 salt_b64=AAAAAAAAAAAAAAAAAAAAAA== scrypt=N=1024,r=1,p=1')).toThrow('missing file_id_b64');
+    expect(() => parseHeader('mdenc:v1 salt_b64=AAAAAAAAAAAAAAAAAAAAAA== file_id_b64=AAAAAAAAAAAAAAAAAAAAAA==')).toThrow('missing scrypt');
   });
 
-  it('rejects out-of-bounds Argon2 parameters', () => {
+  it('rejects out-of-bounds scrypt parameters', () => {
     const salt = 'AAAAAAAAAAAAAAAAAAAAAA==';
     const fid = 'AAAAAAAAAAAAAAAAAAAAAA==';
-    // memory too low
-    expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} argon2=m=512,t=1,p=1`))
-      .toThrow('Invalid Argon2 memory');
-    // memory too high
-    expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} argon2=m=5000000,t=1,p=1`))
-      .toThrow('Invalid Argon2 memory');
-    // iterations too low
-    expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} argon2=m=1024,t=0,p=1`))
-      .toThrow('Invalid Argon2 iterations');
-    // iterations too high
-    expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} argon2=m=1024,t=101,p=1`))
-      .toThrow('Invalid Argon2 iterations');
-    // parallelism too low
-    expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} argon2=m=1024,t=1,p=0`))
-      .toThrow('Invalid Argon2 parallelism');
-    // parallelism too high
-    expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} argon2=m=1024,t=1,p=17`))
-      .toThrow('Invalid Argon2 parallelism');
+    // N too low
+    expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} scrypt=N=512,r=1,p=1`))
+      .toThrow('Invalid scrypt N');
+    // N too high
+    expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} scrypt=N=2000000,r=1,p=1`))
+      .toThrow('Invalid scrypt N');
+    // r too low
+    expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} scrypt=N=1024,r=0,p=1`))
+      .toThrow('Invalid scrypt r');
+    // r too high
+    expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} scrypt=N=1024,r=65,p=1`))
+      .toThrow('Invalid scrypt r');
+    // p too low
+    expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} scrypt=N=1024,r=1,p=0`))
+      .toThrow('Invalid scrypt p');
+    // p too high
+    expect(() => parseHeader(`mdenc:v1 salt_b64=${salt} file_id_b64=${fid} scrypt=N=1024,r=1,p=17`))
+      .toThrow('Invalid scrypt p');
   });
 });
 

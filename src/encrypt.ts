@@ -13,7 +13,7 @@ import {
   toBase64,
   fromBase64,
 } from './header.js';
-import { ChunkingStrategy, DEFAULT_ARGON2_PARAMS } from './types.js';
+import { ChunkingStrategy, DEFAULT_SCRYPT_PARAMS } from './types.js';
 import type { EncryptOptions, MdencHeader } from './types.js';
 import { constantTimeEqual, zeroize } from './crypto-utils.js';
 
@@ -24,7 +24,7 @@ export async function encrypt(
 ): Promise<string> {
   const chunking = options?.chunking ?? ChunkingStrategy.Paragraph;
   const maxChunkSize = options?.maxChunkSize ?? 65536;
-  const argon2 = options?.argon2 ?? DEFAULT_ARGON2_PARAMS;
+  const scryptParams = options?.scrypt ?? DEFAULT_SCRYPT_PARAMS;
 
   // Chunk the plaintext
   let chunks: string[];
@@ -35,28 +35,31 @@ export async function encrypt(
     chunks = chunkByParagraph(plaintext, maxChunkSize);
   }
 
-  // If previousFile provided, extract salt/fileId from its header for key continuity
+  // If previousFile provided, extract salt/fileId/keys from its header to avoid
+  // deriving the same master key twice (same password + same salt).
   let salt: Uint8Array;
   let fileId: Uint8Array;
+  let masterKey: Uint8Array;
+
   const prev = options?.previousFile
-    ? await parsePreviousFileHeader(options.previousFile, password)
+    ? parsePreviousFileHeader(options.previousFile, password)
     : undefined;
 
   if (prev) {
     salt = prev.salt;
     fileId = prev.fileId;
+    masterKey = prev.masterKey;
   } else {
     salt = generateSalt();
     fileId = generateFileId();
+    masterKey = deriveMasterKey(password, salt, scryptParams);
   }
 
-  // Derive keys
-  const masterKey = await deriveMasterKey(password, salt, argon2);
   const { encKey, headerKey, nonceKey } = deriveKeys(masterKey);
 
   try {
     // Build header
-    const header: MdencHeader = { version: 'v1', salt, fileId, argon2 };
+    const header: MdencHeader = { version: 'v1', salt, fileId, scrypt: scryptParams };
     const headerLine = serializeHeader(header);
     const headerHmac = authenticateHeader(headerKey, headerLine);
     const headerAuthLine = `hdrauth_b64=${toBase64(headerHmac)}`;
@@ -109,7 +112,7 @@ export async function decrypt(
   const headerHmac = fromBase64(authMatch[1]);
 
   // Derive keys
-  const masterKey = await deriveMasterKey(password, header.salt, header.argon2);
+  const masterKey = deriveMasterKey(password, header.salt, header.scrypt);
   const { encKey, headerKey, nonceKey } = deriveKeys(masterKey);
 
   try {
@@ -156,10 +159,10 @@ export async function decrypt(
   }
 }
 
-async function parsePreviousFileHeader(
+function parsePreviousFileHeader(
   fileContent: string,
   password: string,
-): Promise<{ salt: Uint8Array; fileId: Uint8Array } | undefined> {
+): { salt: Uint8Array; fileId: Uint8Array; masterKey: Uint8Array } | undefined {
   try {
     const lines = fileContent.split('\n');
     if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
@@ -174,13 +177,18 @@ async function parsePreviousFileHeader(
     if (!authMatch) return undefined;
     const headerHmac = fromBase64(authMatch[1]);
 
-    const masterKey = await deriveMasterKey(password, header.salt, header.argon2);
+    const masterKey = deriveMasterKey(password, header.salt, header.scrypt);
     const { headerKey } = deriveKeys(masterKey);
 
-    if (!verifyHeader(headerKey, headerLine, headerHmac)) return undefined;
+    if (!verifyHeader(headerKey, headerLine, headerHmac)) {
+      zeroize(masterKey, headerKey);
+      return undefined;
+    }
 
-    zeroize(masterKey, headerKey);
-    return { salt: header.salt, fileId: header.fileId };
+    zeroize(headerKey);
+    // Return masterKey for reuse — same password + same salt produces the same key,
+    // so the caller can skip a redundant scrypt derivation.
+    return { salt: header.salt, fileId: header.fileId, masterKey };
   } catch {
     return undefined;
   }

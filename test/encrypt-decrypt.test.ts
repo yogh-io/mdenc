@@ -3,13 +3,13 @@ import { encrypt, decrypt } from '../src/encrypt.js';
 import {
   TEST_PASSWORD,
   WRONG_PASSWORD,
-  FAST_ARGON2,
+  FAST_SCRYPT,
   SIMPLE_MARKDOWN,
   MULTI_PARAGRAPH_MARKDOWN,
 } from './helpers.js';
 import { generateLargeMarkdown } from './helpers.js';
 
-const opts = { argon2: FAST_ARGON2 };
+const opts = { scrypt: FAST_SCRYPT };
 
 describe('encrypt / decrypt', () => {
   it('round-trip for simple markdown', async () => {
