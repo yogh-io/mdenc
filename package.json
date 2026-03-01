@@ -28,7 +28,11 @@
     "build": "bun x tsup",
     "test": "bun test",
     "test:watch": "bun test --watch",
-    "lint": "bun x tsc --noEmit"
+    "lint": "bun x tsc --noEmit",
+    "prepublishOnly": "bun run build",
+    "release": "scripts/release.sh",
+    "release:minor": "scripts/release.sh minor",
+    "release:major": "scripts/release.sh major"
   },
   "keywords": [
     "markdown",
@@ -37,6 +41,17 @@
     "diff-friendly",
     "aead"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yogh-io/mdenc-v1.git"
+  },
+  "homepage": "https://github.com/yogh-io/mdenc-v1#readme",
+  "bugs": {
+    "url": "https://github.com/yogh-io/mdenc-v1/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "license": "ISC",
   "dependencies": {
     "@noble/ciphers": "^1.2.1",

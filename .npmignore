@@ -1,0 +1,15 @@
+src/
+test/
+scripts/
+tsconfig.json
+tsup.config.ts
+*.test.ts
+.claude/
+CLAUDE.md
+SECURITY.md
+SPECIFICATION.md
+bun.lock
+.vscode/
+.idea/
+.DS_Store
+*.log
