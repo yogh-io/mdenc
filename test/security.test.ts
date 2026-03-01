@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { encrypt, decrypt } from '../src/encrypt.js';
 import { TEST_PASSWORD, FAST_ARGON2 } from './helpers.js';
 

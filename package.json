@@ -26,10 +26,10 @@
     "bin"
   ],
   "scripts": {
-    "build": "tsup",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "lint": "tsc --noEmit"
+    "build": "bun x tsup",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "lint": "bun x tsc --noEmit"
   },
   "keywords": [
     "markdown",
@@ -48,6 +48,6 @@
     "@types/node": "^25.3.3",
     "tsup": "^8.4.0",
     "typescript": "^5.7.3",
-    "vitest": "^3.0.5"
+    "@types/bun": "^1.2.4"
   }
 }

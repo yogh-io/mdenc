@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { buildAAD, deriveNonce, encryptChunk, decryptChunk } from '../src/aead.js';
 import { randomBytes } from '@noble/ciphers/webcrypto';
 

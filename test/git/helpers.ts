@@ -25,7 +25,7 @@ export function createTempGitRepo(): TempGitRepo {
 }
 
 export function mdenc(repo: string, args: string[], env?: Record<string, string>): string {
-  return execFileSync('node', [CLI, ...args], {
+  return execFileSync('bun', [CLI, ...args], {
     cwd: repo,
     env: { ...process.env, MDENC_PASSWORD: PASSWORD, ...env },
     encoding: 'utf-8',
@@ -34,7 +34,7 @@ export function mdenc(repo: string, args: string[], env?: Record<string, string>
 }
 
 export function mdencStderr(repo: string, args: string[], env?: Record<string, string>): { stdout: string; stderr: string; status: number | null } {
-  const result = spawnSync('node', [CLI, ...args], {
+  const result = spawnSync('bun', [CLI, ...args], {
     cwd: repo,
     env: { ...process.env, MDENC_PASSWORD: PASSWORD, ...env },
     encoding: 'utf-8',

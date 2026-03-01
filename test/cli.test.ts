@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { execFileSync } from 'node:child_process';
 import { writeFileSync, readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -8,7 +8,7 @@ const CLI = join(import.meta.dirname, '..', 'bin', 'mdenc');
 const PASSWORD = 'test-password';
 
 function run(args: string[], env?: Record<string, string>): string {
-  return execFileSync('node', [CLI, ...args], {
+  return execFileSync('bun', [CLI, ...args], {
     env: { ...process.env, MDENC_PASSWORD: PASSWORD, ...env },
     encoding: 'utf-8',
     timeout: 30000,
@@ -17,7 +17,7 @@ function run(args: string[], env?: Record<string, string>): string {
 
 function runExpectFail(args: string[], env?: Record<string, string>): string {
   try {
-    execFileSync('node', [CLI, ...args], {
+    execFileSync('bun', [CLI, ...args], {
       env: { ...process.env, MDENC_PASSWORD: PASSWORD, ...env },
       encoding: 'utf-8',
       timeout: 30000,

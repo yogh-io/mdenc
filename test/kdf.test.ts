@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { normalizePassword, deriveMasterKey, deriveKeys } from '../src/kdf.js';
 import { TEST_PASSWORD, WRONG_PASSWORD, FAST_ARGON2 } from './helpers.js';
 

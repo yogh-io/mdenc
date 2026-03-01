@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { chunkByParagraph, chunkByFixedSize } from '../src/chunking.js';
 import {
   SIMPLE_MARKDOWN,
