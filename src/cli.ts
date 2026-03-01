@@ -1,6 +1,15 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { encrypt, decrypt } from './encrypt.js';
 import { verifySeal } from './seal.js';
+import { initCommand, removeHooksCommand } from './git/init.js';
+import { markCommand } from './git/mark.js';
+import { statusCommand } from './git/status.js';
+import {
+  preCommitHook,
+  postCheckoutHook,
+  postMergeHook,
+  postRewriteHook,
+} from './git/hooks.js';
 
 function readPasswordFromTTY(prompt: string): Promise<string> {
   return new Promise((resolve) => {
@@ -86,26 +95,32 @@ async function getPasswordWithConfirmation(): Promise<string> {
 
 function usage(): never {
   console.error(`Usage:
-  mdenc encrypt <file> [-o output]
-  mdenc decrypt <file> [-o output]
-  mdenc verify <file>`);
+  mdenc encrypt <file> [-o output]    Encrypt a markdown file
+  mdenc decrypt <file> [-o output]    Decrypt an mdenc file
+  mdenc verify <file>                 Verify file integrity
+
+Git integration:
+  mdenc init                          Set up git hooks for automatic encryption
+  mdenc mark <directory>              Mark a directory for encryption
+  mdenc status                        Show encryption status
+  mdenc remove-hooks                  Remove mdenc git hooks`);
   process.exit(1);
 }
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
-  if (args.length < 2) usage();
+  if (args.length === 0) usage();
 
   const command = args[0];
-  const inputFile = args[1];
-
-  const outputIdx = args.indexOf('-o');
-  const outputFile = outputIdx >= 0 ? args[outputIdx + 1] : undefined;
 
   try {
     switch (command) {
       case 'encrypt': {
+        if (!args[1]) usage();
+        const inputFile = args[1];
+        const outputIdx = args.indexOf('-o');
+        const outputFile = outputIdx >= 0 ? args[outputIdx + 1] : undefined;
         const password = await getPasswordWithConfirmation();
         const plaintext = readFileSync(inputFile, 'utf-8');
         const encrypted = await encrypt(plaintext, password);
@@ -118,6 +133,10 @@ async function main(): Promise<void> {
       }
 
       case 'decrypt': {
+        if (!args[1]) usage();
+        const inputFile = args[1];
+        const outputIdx = args.indexOf('-o');
+        const outputFile = outputIdx >= 0 ? args[outputIdx + 1] : undefined;
         const password = await getPassword();
         const fileContent = readFileSync(inputFile, 'utf-8');
         const decrypted = await decrypt(fileContent, password);
@@ -130,6 +149,8 @@ async function main(): Promise<void> {
       }
 
       case 'verify': {
+        if (!args[1]) usage();
+        const inputFile = args[1];
         const password = await getPassword();
         const fileContent = readFileSync(inputFile, 'utf-8');
         const valid = await verifySeal(fileContent, password);
@@ -142,6 +163,44 @@ async function main(): Promise<void> {
         }
         break;
       }
+
+      case 'init':
+        await initCommand();
+        break;
+
+      case 'mark': {
+        if (!args[1]) {
+          console.error('Usage: mdenc mark <directory>');
+          process.exit(1);
+        }
+        markCommand(args[1]);
+        break;
+      }
+
+      case 'status':
+        statusCommand();
+        break;
+
+      case 'remove-hooks':
+        removeHooksCommand();
+        break;
+
+      // Git hook handlers (called by hook scripts, not directly by user)
+      case 'pre-commit':
+        await preCommitHook();
+        break;
+
+      case 'post-checkout':
+        await postCheckoutHook();
+        break;
+
+      case 'post-merge':
+        await postMergeHook();
+        break;
+
+      case 'post-rewrite':
+        await postRewriteHook();
+        break;
 
       default:
         console.error(`Unknown command: ${command}`);
