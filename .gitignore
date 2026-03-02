@@ -4,3 +4,5 @@ coverage/
 *.tgz
 .DS_Store
 package-lock.json
+site/dist/
+site/node_modules/

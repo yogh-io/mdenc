@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mdenc — Encrypt your Markdown</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>mdenc</h1>
+      <p class="tagline">Paragraph-granular Markdown encryption for clean git diffs</p>
+    </header>
+
+    <div class="controls">
+      <label class="password-field">
+        <span>Password</span>
+        <div class="password-input-wrap">
+          <input type="password" id="password" value="demo-password" autocomplete="off" spellcheck="false" />
+          <button type="button" id="toggle-password" class="icon-btn" aria-label="Toggle password visibility">
+            <svg id="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            <svg id="eye-off-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="hidden">
+              <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/>
+              <line x1="1" y1="1" x2="23" y2="23"/>
+            </svg>
+          </button>
+        </div>
+      </label>
+      <label class="scrypt-field">
+        <span>scrypt</span>
+        <select id="scrypt-preset">
+          <option value="fast" selected>Fast (demo)</option>
+          <option value="production">Production</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="panels">
+      <div class="panel">
+        <div class="panel-header">
+          <h2>Plaintext Markdown</h2>
+          <span class="direction-hint" id="encrypt-hint">Encrypt &rarr;</span>
+        </div>
+        <textarea id="plaintext" spellcheck="false" placeholder="Type or paste Markdown here..."></textarea>
+        <div class="error" id="plaintext-error"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">
+          <span class="direction-hint" id="decrypt-hint">&larr; Decrypt</span>
+          <h2>Encrypted Output</h2>
+        </div>
+        <textarea id="encrypted" spellcheck="false" placeholder="Paste encrypted mdenc content here to decrypt..."></textarea>
+        <div class="error" id="encrypted-error"></div>
+      </div>
+    </div>
+
+    <div class="loading hidden" id="loading">
+      <div class="spinner"></div>
+      <span id="loading-text">Encrypting...</span>
+    </div>
+
+    <section class="explainer">
+      <h2>How it works</h2>
+      <div class="explainer-grid">
+        <div class="explainer-card">
+          <h3>Paragraph-granular encryption</h3>
+          <p>
+            mdenc splits Markdown on double newlines and encrypts each paragraph
+            independently. When you change one paragraph, only that chunk's
+            ciphertext changes — the rest stays identical.
+          </p>
+        </div>
+        <div class="explainer-card">
+          <h3>Deterministic ciphertext</h3>
+          <p>
+            Nonces are derived from HMAC-SHA256 of the plaintext, not random.
+            Same password + same text = same output, every time. This makes
+            encrypted files diff-friendly in git.
+          </p>
+        </div>
+        <div class="explainer-card">
+          <h3>File format</h3>
+          <pre><code>mdenc:v1 salt=... file_id=... scrypt=...
+hdrauth=&lt;HMAC of header&gt;
+&lt;base64 chunk: nonce || ciphertext || tag&gt;
+&lt;base64 chunk: nonce || ciphertext || tag&gt;
+seal=&lt;HMAC of all lines above&gt;</code></pre>
+        </div>
+        <div class="explainer-card">
+          <h3>Git integration</h3>
+          <p>
+            mdenc uses git's smudge/clean filter to transparently encrypt on
+            commit and decrypt on checkout. Your working directory stays
+            plaintext; git stores ciphertext.
+          </p>
+        </div>
+      </div>
+      <p class="cta">
+        <a href="https://github.com/jornb/mdenc" target="_blank" rel="noopener">View on GitHub</a>
+        &middot;
+        <code>npm install -g mdenc</code>
+      </p>
+    </section>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
