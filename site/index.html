@@ -7,103 +7,109 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <header>
-      <h1>mdenc</h1>
-      <p class="tagline">Paragraph-granular Markdown encryption for clean git diffs</p>
-    </header>
-
-    <div class="controls">
-      <label class="password-field">
-        <span>Password</span>
-        <div class="password-input-wrap">
+    <div class="terminal">
+      <div class="titlebar">
+        <span class="titlebar-title">mdenc</span>
+        <span class="titlebar-sep">│</span>
+        <label class="titlebar-field">
+          <span class="label">password:</span>
           <input type="password" id="password" value="demo-password" autocomplete="off" spellcheck="false" />
-          <button type="button" id="toggle-password" class="icon-btn" aria-label="Toggle password visibility">
-            <svg id="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/>
-              <circle cx="12" cy="12" r="3"/>
-            </svg>
-            <svg id="eye-off-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="hidden">
-              <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/>
-              <line x1="1" y1="1" x2="23" y2="23"/>
-            </svg>
-          </button>
-        </div>
-      </label>
-      <label class="scrypt-field">
-        <span>scrypt</span>
-        <select id="scrypt-preset">
-          <option value="fast" selected>Fast (demo)</option>
-          <option value="production">Production</option>
-        </select>
-      </label>
-    </div>
-
-    <div class="panels">
-      <div class="panel">
-        <div class="panel-header">
-          <h2>Plaintext Markdown</h2>
-          <span class="direction-hint" id="encrypt-hint">Encrypt &rarr;</span>
-        </div>
-        <textarea id="plaintext" spellcheck="false" placeholder="Type or paste Markdown here..."></textarea>
-        <div class="error" id="plaintext-error"></div>
+          <button type="button" id="toggle-password">[show]</button>
+        </label>
+        <span class="titlebar-sep">│</span>
+        <label class="titlebar-field">
+          <span class="label">scrypt:</span>
+          <select id="scrypt-preset">
+            <option value="fast" selected>fast</option>
+            <option value="production">production</option>
+          </select>
+        </label>
       </div>
-      <div class="panel">
-        <div class="panel-header">
-          <span class="direction-hint" id="decrypt-hint">&larr; Decrypt</span>
-          <h2>Encrypted Output</h2>
-        </div>
-        <textarea id="encrypted" spellcheck="false" placeholder="Paste encrypted mdenc content here to decrypt..."></textarea>
-        <div class="error" id="encrypted-error"></div>
-      </div>
-    </div>
 
-    <div class="loading hidden" id="loading">
-      <div class="spinner"></div>
-      <span id="loading-text">Encrypting...</span>
-    </div>
+      <div class="panels">
+        <div class="pane" id="pane-plaintext">
+          <div class="pane-header">
+            <span>── PLAINTEXT ──</span>
+          </div>
+          <div class="editor">
+            <pre id="plaintext-hl" aria-hidden="true"></pre>
+            <textarea id="plaintext" spellcheck="false" placeholder="Type or paste Markdown here..."></textarea>
+          </div>
+          <div class="pane-footer">
+            <span class="error" id="plaintext-error"></span>
+          </div>
+        </div>
 
-    <section class="explainer">
-      <h2>How it works</h2>
-      <div class="explainer-grid">
-        <div class="explainer-card">
-          <h3>Paragraph-granular encryption</h3>
-          <p>
-            mdenc splits Markdown on double newlines and encrypts each paragraph
-            independently. When you change one paragraph, only that chunk's
-            ciphertext changes — the rest stays identical.
-          </p>
+        <div class="gutter">
+          <span id="direction">▶</span>
         </div>
-        <div class="explainer-card">
-          <h3>Deterministic ciphertext</h3>
-          <p>
-            Nonces are derived from HMAC-SHA256 of the plaintext, not random.
-            Same password + same text = same output, every time. This makes
-            encrypted files diff-friendly in git.
-          </p>
-        </div>
-        <div class="explainer-card">
-          <h3>File format</h3>
-          <pre><code>mdenc:v1 salt=... file_id=... scrypt=...
-hdrauth=&lt;HMAC of header&gt;
-&lt;base64 chunk: nonce || ciphertext || tag&gt;
-&lt;base64 chunk: nonce || ciphertext || tag&gt;
-seal=&lt;HMAC of all lines above&gt;</code></pre>
-        </div>
-        <div class="explainer-card">
-          <h3>Git integration</h3>
-          <p>
-            mdenc uses git's smudge/clean filter to transparently encrypt on
-            commit and decrypt on checkout. Your working directory stays
-            plaintext; git stores ciphertext.
-          </p>
+
+        <div class="pane" id="pane-encrypted">
+          <div class="pane-header">
+            <span>── ENCRYPTED ──</span>
+          </div>
+          <div class="editor">
+            <pre id="encrypted-hl" aria-hidden="true"></pre>
+            <textarea id="encrypted" spellcheck="false" placeholder="Paste encrypted mdenc content to decrypt..."></textarea>
+          </div>
+          <div class="pane-footer">
+            <span class="error" id="encrypted-error"></span>
+          </div>
         </div>
       </div>
-      <p class="cta">
-        <a href="https://github.com/jornb/mdenc" target="_blank" rel="noopener">View on GitHub</a>
-        &middot;
-        <code>npm install -g mdenc</code>
-      </p>
-    </section>
+
+      <div class="statusbar">
+        <span id="status-text"></span>
+        <button id="help-toggle">? help</button>
+        <a href="https://github.com/jornb/mdenc" target="_blank" rel="noopener">github</a>
+        <span class="sep">│</span>
+        <span>npm i -g mdenc</span>
+      </div>
+    </div>
+
+    <div class="help-overlay hidden" id="help-overlay">
+      <div class="help-panel">
+        <div class="help-title">
+          <span>── HOW IT WORKS ──</span>
+          <button id="help-close">[close]</button>
+        </div>
+        <div class="help-body">
+          <p><strong>Paragraph-granular encryption</strong></p>
+          <p>
+            mdenc splits Markdown on blank lines and encrypts each paragraph
+            independently with XChaCha20-Poly1305. Change one paragraph and
+            only that chunk's ciphertext changes.
+          </p>
+          <br/>
+          <p><strong>Deterministic ciphertext</strong></p>
+          <p>
+            Nonces are derived from HMAC-SHA256(key, plaintext), not random.
+            Same password + same text = same output. This makes encrypted
+            files produce clean git diffs.
+          </p>
+          <br/>
+          <p><strong>File format</strong></p>
+          <pre>mdenc:v1 salt_b64=... file_id_b64=... scrypt=N=...,r=...,p=...
+hdrauth_b64=&lt;HMAC-SHA256 of header&gt;
+&lt;base64 chunk: nonce ‖ ciphertext ‖ tag&gt;
+&lt;base64 chunk: nonce ‖ ciphertext ‖ tag&gt;
+seal_b64=&lt;HMAC-SHA256 of all lines above&gt;</pre>
+          <br/>
+          <p><strong>Git integration</strong></p>
+          <p>
+            Uses git's native smudge/clean filter. Your working directory
+            stays plaintext; git objects store ciphertext. Diffs show
+            plaintext via textconv.
+          </p>
+          <br/>
+          <p><strong>Color coding</strong></p>
+          <p>
+            Each color above maps a plaintext paragraph to its encrypted
+            chunk. Edit a paragraph and watch only the matching chunk change.
+          </p>
+        </div>
+      </div>
+    </div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

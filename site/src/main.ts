@@ -2,20 +2,36 @@ import { encrypt, decrypt } from "mdenc";
 import type { ScryptParams } from "mdenc";
 import "./style.css";
 
+// --- Color palette (vibrant, distinct on dark bg) ---
+const PALETTE = [
+  "#f87171", // red
+  "#34d399", // emerald
+  "#fbbf24", // amber
+  "#60a5fa", // blue
+  "#a78bfa", // violet
+  "#f472b6", // pink
+  "#2dd4bf", // teal
+  "#fb923c", // orange
+];
+
 // --- DOM refs ---
-const $plaintext = document.getElementById("plaintext") as HTMLTextAreaElement;
-const $encrypted = document.getElementById("encrypted") as HTMLTextAreaElement;
-const $password = document.getElementById("password") as HTMLInputElement;
-const $togglePw = document.getElementById("toggle-password") as HTMLButtonElement;
-const $eyeIcon = document.getElementById("eye-icon") as SVGElement;
-const $eyeOffIcon = document.getElementById("eye-off-icon") as SVGElement;
-const $scryptPreset = document.getElementById("scrypt-preset") as HTMLSelectElement;
-const $loading = document.getElementById("loading") as HTMLDivElement;
-const $loadingText = document.getElementById("loading-text") as HTMLSpanElement;
-const $plaintextError = document.getElementById("plaintext-error") as HTMLDivElement;
-const $encryptedError = document.getElementById("encrypted-error") as HTMLDivElement;
-const $encryptHint = document.getElementById("encrypt-hint") as HTMLSpanElement;
-const $decryptHint = document.getElementById("decrypt-hint") as HTMLSpanElement;
+const $ = (id: string) => document.getElementById(id)!;
+const $plain = $("plaintext") as HTMLTextAreaElement;
+const $plainHl = $("plaintext-hl") as HTMLPreElement;
+const $enc = $("encrypted") as HTMLTextAreaElement;
+const $encHl = $("encrypted-hl") as HTMLPreElement;
+const $password = $("password") as HTMLInputElement;
+const $togglePw = $("toggle-password") as HTMLButtonElement;
+const $scrypt = $("scrypt-preset") as HTMLSelectElement;
+const $direction = $("direction") as HTMLSpanElement;
+const $plainErr = $("plaintext-error") as HTMLSpanElement;
+const $encErr = $("encrypted-error") as HTMLSpanElement;
+const $statusText = $("status-text") as HTMLSpanElement;
+const $paneP = $("pane-plaintext") as HTMLDivElement;
+const $paneE = $("pane-encrypted") as HTMLDivElement;
+const $helpOverlay = $("help-overlay") as HTMLDivElement;
+const $helpToggle = $("help-toggle") as HTMLButtonElement;
+const $helpClose = $("help-close") as HTMLButtonElement;
 
 // --- State ---
 type Direction = "encrypt" | "decrypt";
@@ -28,51 +44,110 @@ const FAST_SCRYPT: ScryptParams = { N: 1024, r: 1, p: 1 };
 const PROD_SCRYPT: ScryptParams = { N: 16384, r: 8, p: 1 };
 
 function getScryptParams(): ScryptParams {
-  return $scryptPreset.value === "fast" ? FAST_SCRYPT : PROD_SCRYPT;
+  return $scrypt.value === "fast" ? FAST_SCRYPT : PROD_SCRYPT;
 }
+
+// --- HTML escaping ---
+function esc(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// --- Colorize plaintext by paragraph ---
+function colorizePlaintext(text: string): string {
+  if (!text) return "\n";
+  // Split but keep separators (sequences of 2+ newlines)
+  const parts = text.split(/(\n\n+)/);
+  let idx = 0;
+  const html = parts
+    .map((part) => {
+      if (/^\n\n+$/.test(part)) return esc(part); // separator
+      if (part === "") return "";
+      const color = PALETTE[idx++ % PALETTE.length];
+      return `<span style="color:${color}">${esc(part)}</span>`;
+    })
+    .join("");
+  return html + "\n"; // trailing newline for scroll-height parity
+}
+
+// --- Colorize encrypted output (header/seal dim, chunks colored) ---
+function colorizeEncrypted(text: string): string {
+  if (!text) return "\n";
+  const lines = text.split("\n");
+  // Remove trailing empty line
+  if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+
+  let chunkIdx = 0;
+  const html = lines
+    .map((line) => {
+      const isMeta =
+        line.startsWith("mdenc:") ||
+        line.startsWith("hdrauth") ||
+        line.startsWith("seal");
+      if (isMeta) {
+        return `<span class="meta">${esc(line)}</span>`;
+      }
+      const color = PALETTE[chunkIdx++ % PALETTE.length];
+      return `<span style="color:${color}">${esc(line)}</span>`;
+    })
+    .join("\n");
+  return html + "\n";
+}
+
+// --- Update highlight overlays ---
+function updatePlaintextHl() {
+  $plainHl.innerHTML = colorizePlaintext($plain.value);
+}
+
+function updateEncryptedHl() {
+  $encHl.innerHTML = colorizeEncrypted($enc.value);
+}
+
+// --- Scroll sync (textarea → pre) ---
+function syncScroll(ta: HTMLTextAreaElement, pre: HTMLPreElement) {
+  ta.addEventListener("scroll", () => {
+    pre.scrollTop = ta.scrollTop;
+    pre.scrollLeft = ta.scrollLeft;
+  });
+}
+syncScroll($plain, $plainHl);
+syncScroll($enc, $encHl);
 
 // --- UI helpers ---
-function showLoading(text: string) {
-  $loadingText.textContent = text;
-  $loading.classList.remove("hidden");
-}
-
-function hideLoading() {
-  $loading.classList.add("hidden");
+function setStatus(text: string) {
+  $statusText.textContent = text;
 }
 
 function showError(target: "plaintext" | "encrypted", msg: string) {
-  const el = target === "plaintext" ? $plaintextError : $encryptedError;
-  el.textContent = msg;
+  (target === "plaintext" ? $plainErr : $encErr).textContent = msg;
 }
 
 function clearErrors() {
-  $plaintextError.textContent = "";
-  $encryptedError.textContent = "";
+  $plainErr.textContent = "";
+  $encErr.textContent = "";
 }
 
-function updateHints() {
-  $encryptHint.style.opacity = direction === "encrypt" ? "1" : "0.3";
-  $decryptHint.style.opacity = direction === "decrypt" ? "1" : "0.3";
+function updateDirection() {
+  $direction.textContent = direction === "encrypt" ? "▶" : "◀";
+  $paneP.classList.toggle("active", direction === "encrypt");
+  $paneE.classList.toggle("active", direction === "decrypt");
 }
 
 // --- Core logic ---
 async function doEncrypt() {
-  const text = $plaintext.value;
+  const text = $plain.value;
   const pw = $password.value;
 
   if (!text) {
-    $encrypted.value = "";
+    $enc.value = "";
+    updateEncryptedHl();
     return;
   }
   if (!pw) {
-    showError("encrypted", "Enter a password");
+    showError("encrypted", "enter a password");
     return;
   }
 
-  showLoading("Encrypting\u2026");
-
-  // Yield to let the DOM repaint before blocking scrypt
+  setStatus("encrypting\u2026");
   await new Promise((r) => setTimeout(r, 0));
 
   try {
@@ -80,41 +155,47 @@ async function doEncrypt() {
       scrypt: getScryptParams(),
       previousFile,
     });
-    $encrypted.value = result;
+    $enc.value = result;
     previousFile = result;
+    updateEncryptedHl();
     clearErrors();
+    setStatus("");
   } catch (e) {
     showError("encrypted", e instanceof Error ? e.message : String(e));
-  } finally {
-    hideLoading();
+    setStatus("");
   }
 }
 
 async function doDecrypt() {
-  const ciphertext = $encrypted.value;
+  const ciphertext = $enc.value;
   const pw = $password.value;
 
   if (!ciphertext) {
-    $plaintext.value = "";
+    $plain.value = "";
+    updatePlaintextHl();
     return;
   }
   if (!pw) {
-    showError("plaintext", "Enter a password");
+    showError("plaintext", "enter a password");
     return;
   }
 
-  showLoading("Decrypting\u2026");
+  setStatus("decrypting\u2026");
   await new Promise((r) => setTimeout(r, 0));
 
   try {
     const result = await decrypt(ciphertext, pw);
-    $plaintext.value = result;
+    $plain.value = result;
+    updatePlaintextHl();
     clearErrors();
+    setStatus("");
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    showError("plaintext", msg.includes("tag") ? "Wrong password or corrupted data" : msg);
-  } finally {
-    hideLoading();
+    showError(
+      "plaintext",
+      msg.includes("tag") ? "wrong password or corrupted data" : msg,
+    );
+    setStatus("");
   }
 }
 
@@ -124,11 +205,8 @@ function scheduleUpdate() {
     if (processing) return;
     processing = true;
     try {
-      if (direction === "encrypt") {
-        await doEncrypt();
-      } else {
-        await doDecrypt();
-      }
+      if (direction === "encrypt") await doEncrypt();
+      else await doDecrypt();
     } finally {
       processing = false;
     }
@@ -136,51 +214,66 @@ function scheduleUpdate() {
 }
 
 // --- Event listeners ---
-$plaintext.addEventListener("input", () => {
+$plain.addEventListener("input", () => {
   direction = "encrypt";
-  updateHints();
+  updateDirection();
+  updatePlaintextHl();
   clearErrors();
   scheduleUpdate();
 });
 
-$plaintext.addEventListener("focus", () => {
+$plain.addEventListener("focus", () => {
   direction = "encrypt";
-  updateHints();
+  updateDirection();
 });
 
-$encrypted.addEventListener("input", () => {
+$enc.addEventListener("input", () => {
   direction = "decrypt";
-  updateHints();
+  updateDirection();
+  updateEncryptedHl();
   clearErrors();
   scheduleUpdate();
 });
 
-$encrypted.addEventListener("focus", () => {
+$enc.addEventListener("focus", () => {
   direction = "decrypt";
-  updateHints();
+  updateDirection();
 });
 
 $password.addEventListener("input", () => {
-  previousFile = undefined; // Clear cache on password change
+  previousFile = undefined;
   clearErrors();
   scheduleUpdate();
 });
 
-$scryptPreset.addEventListener("change", () => {
+$scrypt.addEventListener("change", () => {
   previousFile = undefined;
   scheduleUpdate();
 });
 
-// Password visibility toggle
+// Password toggle
 $togglePw.addEventListener("click", () => {
-  const isPassword = $password.type === "password";
-  $password.type = isPassword ? "text" : "password";
-  $eyeIcon.classList.toggle("hidden", isPassword);
-  $eyeOffIcon.classList.toggle("hidden", !isPassword);
+  const showing = $password.type === "text";
+  $password.type = showing ? "password" : "text";
+  $togglePw.textContent = showing ? "[show]" : "[hide]";
 });
 
-// --- Sample content on load ---
-const SAMPLE_MARKDOWN = `# Meeting Notes
+// Help overlay
+$helpToggle.addEventListener("click", () =>
+  $helpOverlay.classList.remove("hidden"),
+);
+$helpClose.addEventListener("click", () =>
+  $helpOverlay.classList.add("hidden"),
+);
+$helpOverlay.addEventListener("click", (e) => {
+  if (e.target === $helpOverlay) $helpOverlay.classList.add("hidden");
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") $helpOverlay.classList.add("hidden");
+});
+
+// --- Sample content ---
+const SAMPLE = `# Meeting Notes
 
 Discussed the Q3 roadmap and assigned owners for each deliverable.
 
@@ -199,8 +292,9 @@ Total approved budget is $45,000 for infrastructure upgrades.
 *Next meeting: Monday 10am*`;
 
 async function init() {
-  $plaintext.value = SAMPLE_MARKDOWN;
-  updateHints();
+  $plain.value = SAMPLE;
+  updateDirection();
+  updatePlaintextHl();
   await doEncrypt();
 }
 
