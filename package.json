@@ -28,7 +28,8 @@
     "build": "bun x tsup",
     "test": "bun test",
     "test:watch": "bun test --watch",
-    "lint": "bun x tsc --noEmit",
+    "lint": "bun x tsc --noEmit && bun x biome check .",
+    "format": "bun x biome format --write .",
     "prepublishOnly": "bun run build",
     "release": "scripts/release.sh",
     "release:minor": "scripts/release.sh minor",
@@ -58,9 +59,10 @@
     "@noble/hashes": "^1.7.1"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.4",
+    "@types/bun": "^1.2.4",
     "@types/node": "^25.3.3",
     "tsup": "^8.4.0",
-    "typescript": "^5.7.3",
-    "@types/bun": "^1.2.4"
+    "typescript": "^5.7.3"
   }
 }

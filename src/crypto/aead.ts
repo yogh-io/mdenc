@@ -1,6 +1,6 @@
-import { xchacha20poly1305 } from '@noble/ciphers/chacha';
-import { hmac } from '@noble/hashes/hmac';
-import { sha256 } from '@noble/hashes/sha256';
+import { xchacha20poly1305 } from "@noble/ciphers/chacha";
+import { hmac } from "@noble/hashes/hmac";
+import { sha256 } from "@noble/hashes/sha256";
 
 const NONCE_LENGTH = 24;
 
@@ -38,7 +38,7 @@ export function decryptChunk(
   fileId: Uint8Array,
 ): Uint8Array {
   if (payload.length < NONCE_LENGTH + 16) {
-    throw new Error('Chunk payload too short');
+    throw new Error("Chunk payload too short");
   }
   const nonce = payload.slice(0, NONCE_LENGTH);
   const ciphertext = payload.slice(NONCE_LENGTH);
@@ -47,14 +47,14 @@ export function decryptChunk(
   try {
     return cipher.decrypt(ciphertext);
   } catch {
-    throw new Error('Chunk authentication failed');
+    throw new Error("Chunk authentication failed");
   }
 }
 
 function bytesToHex(bytes: Uint8Array): string {
-  let hex = '';
+  let hex = "";
   for (let i = 0; i < bytes.length; i++) {
-    hex += bytes[i].toString(16).padStart(2, '0');
+    hex += bytes[i]!.toString(16).padStart(2, "0");
   }
   return hex;
 }

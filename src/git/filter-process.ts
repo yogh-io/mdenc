@@ -1,16 +1,16 @@
-import { findGitRoot } from './utils.js';
-import { resolvePassword } from './password.js';
-import { cleanFilter, smudgeFilter } from './filter.js';
+import { cleanFilter, smudgeFilter } from "./filter.js";
+import { resolvePassword } from "./password.js";
+import { findGitRoot } from "./utils.js";
 
 // --- Pkt-line protocol ---
 
-const FLUSH = Buffer.from('0000', 'ascii');
+const FLUSH = Buffer.from("0000", "ascii");
 const MAX_PKT_DATA = 65516; // max payload per pkt-line (65520 - 4)
 
 function writePktLine(data: string): void {
-  const payload = Buffer.from(data, 'utf-8');
-  const len = (payload.length + 4).toString(16).padStart(4, '0');
-  process.stdout.write(len, 'ascii');
+  const payload = Buffer.from(data, "utf-8");
+  const len = (payload.length + 4).toString(16).padStart(4, "0");
+  process.stdout.write(len, "ascii");
   process.stdout.write(payload);
 }
 
@@ -22,8 +22,8 @@ function writeBinaryPktLines(data: Buffer): void {
   let offset = 0;
   while (offset < data.length) {
     const chunk = data.subarray(offset, offset + MAX_PKT_DATA);
-    const len = (chunk.length + 4).toString(16).padStart(4, '0');
-    process.stdout.write(len, 'ascii');
+    const len = (chunk.length + 4).toString(16).padStart(4, "0");
+    process.stdout.write(len, "ascii");
     process.stdout.write(chunk);
     offset += chunk.length;
   }
@@ -31,13 +31,12 @@ function writeBinaryPktLines(data: Buffer): void {
 
 class PktLineReader {
   private buf = Buffer.alloc(0);
-  private stream: NodeJS.ReadableStream;
+  // biome-ignore lint/suspicious/noConfusingVoidType: standard Promise resolve signature
   private resolveWait: ((value: void) => void) | null = null;
   private ended = false;
 
   constructor(stream: NodeJS.ReadableStream) {
-    this.stream = stream;
-    stream.on('data', (chunk: Buffer) => {
+    stream.on("data", (chunk: Buffer) => {
       this.buf = Buffer.concat([this.buf, chunk]);
       if (this.resolveWait) {
         const r = this.resolveWait;
@@ -45,7 +44,7 @@ class PktLineReader {
         r();
       }
     });
-    stream.on('end', () => {
+    stream.on("end", () => {
       this.ended = true;
       if (this.resolveWait) {
         const r = this.resolveWait;
@@ -78,7 +77,7 @@ class PktLineReader {
     const lenBuf = await this.readExact(4);
     if (!lenBuf) return undefined; // EOF
 
-    const lenStr = lenBuf.toString('ascii');
+    const lenStr = lenBuf.toString("ascii");
     const len = parseInt(lenStr, 16);
 
     if (len === 0) return null; // flush packet
@@ -86,8 +85,8 @@ class PktLineReader {
     if (len <= 4) throw new Error(`Invalid pkt-line length: ${len}`);
 
     const payload = await this.readExact(len - 4);
-    if (!payload) throw new Error('Unexpected EOF in pkt-line payload');
-    return payload.toString('utf-8');
+    if (!payload) throw new Error("Unexpected EOF in pkt-line payload");
+    return payload.toString("utf-8");
   }
 
   /** Read lines until flush. Returns array of strings (newlines stripped). */
@@ -96,7 +95,7 @@ class PktLineReader {
     while (true) {
       const pkt = await this.readPacket();
       if (pkt === null || pkt === undefined) break;
-      lines.push(pkt.replace(/\n$/, ''));
+      lines.push(pkt.replace(/\n$/, ""));
     }
     return lines;
   }
@@ -108,12 +107,12 @@ class PktLineReader {
       const lenBuf = await this.readExact(4);
       if (!lenBuf) break; // EOF
 
-      const len = parseInt(lenBuf.toString('ascii'), 16);
+      const len = parseInt(lenBuf.toString("ascii"), 16);
       if (len === 0) break; // flush
       if (len <= 4) throw new Error(`Invalid pkt-line length: ${len}`);
 
       const payload = await this.readExact(len - 4);
-      if (!payload) throw new Error('Unexpected EOF in pkt-line content');
+      if (!payload) throw new Error("Unexpected EOF in pkt-line content");
       chunks.push(payload);
     }
     return Buffer.concat(chunks);
@@ -130,20 +129,20 @@ export async function filterProcessMain(): Promise<void> {
 
   // --- Handshake ---
   const welcome = await reader.readUntilFlush();
-  if (!welcome.includes('git-filter-client') || !welcome.includes('version=2')) {
-    process.stderr.write('mdenc: invalid filter protocol handshake\n');
+  if (!welcome.includes("git-filter-client") || !welcome.includes("version=2")) {
+    process.stderr.write("mdenc: invalid filter protocol handshake\n");
     process.exit(1);
   }
 
-  writePktLine('git-filter-server\n');
-  writePktLine('version=2\n');
+  writePktLine("git-filter-server\n");
+  writePktLine("version=2\n");
   writeFlush();
 
   // Read capabilities
   const caps = await reader.readUntilFlush();
   // Respond with the capabilities we support
-  if (caps.includes('capability=clean')) writePktLine('capability=clean\n');
-  if (caps.includes('capability=smudge')) writePktLine('capability=smudge\n');
+  if (caps.includes("capability=clean")) writePktLine("capability=clean\n");
+  if (caps.includes("capability=smudge")) writePktLine("capability=smudge\n");
   writeFlush();
 
   // --- Command loop ---
@@ -151,40 +150,40 @@ export async function filterProcessMain(): Promise<void> {
     const commandLines = await reader.readUntilFlush();
     if (commandLines.length === 0) break; // EOF / no more commands
 
-    let cmd = '';
-    let pathname = '';
+    let cmd = "";
+    let pathname = "";
     for (const line of commandLines) {
-      if (line.startsWith('command=')) cmd = line.slice('command='.length);
-      if (line.startsWith('pathname=')) pathname = line.slice('pathname='.length);
+      if (line.startsWith("command=")) cmd = line.slice("command=".length);
+      if (line.startsWith("pathname=")) pathname = line.slice("pathname=".length);
     }
 
     // Read file content
     const content = await reader.readContentUntilFlush();
-    const contentStr = content.toString('utf-8');
+    const contentStr = content.toString("utf-8");
 
     try {
       let result: string;
 
-      if (cmd === 'clean') {
+      if (cmd === "clean") {
         if (!password) {
-          writePktLine('status=error\n');
+          writePktLine("status=error\n");
           writeFlush();
           writeFlush();
           continue;
         }
         result = await cleanFilter(pathname, contentStr, password, repoRoot);
-      } else if (cmd === 'smudge') {
+      } else if (cmd === "smudge") {
         result = await smudgeFilter(contentStr, password);
       } else {
         process.stderr.write(`mdenc: unknown filter command: ${cmd}\n`);
-        writePktLine('status=error\n');
+        writePktLine("status=error\n");
         writeFlush();
         writeFlush();
         continue;
       }
 
-      const resultBuf = Buffer.from(result, 'utf-8');
-      writePktLine('status=success\n');
+      const resultBuf = Buffer.from(result, "utf-8");
+      writePktLine("status=success\n");
       writeFlush();
       writeBinaryPktLines(resultBuf);
       writeFlush();
@@ -192,7 +191,7 @@ export async function filterProcessMain(): Promise<void> {
       process.stderr.write(
         `mdenc: filter error for ${pathname}: ${err instanceof Error ? err.message : err}\n`,
       );
-      writePktLine('status=error\n');
+      writePktLine("status=error\n");
       writeFlush();
       writeFlush();
     }

@@ -1,23 +1,23 @@
-import { readFileSync, writeFileSync } from 'node:fs';
-import { encrypt, decrypt } from './encrypt.js';
-import { verifySeal } from './seal.js';
-import { initCommand, removeFilterCommand } from './git/init.js';
-import { markCommand } from './git/mark.js';
-import { statusCommand } from './git/status.js';
-import { genpassCommand } from './git/genpass.js';
-import { simpleCleanFilter, simpleSmudgeFilter } from './git/filter.js';
-import { filterProcessMain } from './git/filter-process.js';
-import { textconvCommand } from './git/textconv.js';
+import { readFileSync, writeFileSync } from "node:fs";
+import { decrypt, encrypt } from "./crypto/encrypt.js";
+import { verifySeal } from "./crypto/seal.js";
+import { simpleCleanFilter, simpleSmudgeFilter } from "./git/filter.js";
+import { filterProcessMain } from "./git/filter-process.js";
+import { genpassCommand } from "./git/genpass.js";
+import { initCommand, removeFilterCommand } from "./git/init.js";
+import { markCommand } from "./git/mark.js";
+import { statusCommand } from "./git/status.js";
+import { textconvCommand } from "./git/textconv.js";
 
 function readPasswordFromTTY(prompt: string): Promise<string> {
   return new Promise((resolve) => {
     if (!process.stdin.isTTY) {
       // Non-TTY fallback: read a line from stdin
       process.stderr.write(prompt);
-      let data = '';
-      process.stdin.setEncoding('utf-8');
-      process.stdin.on('data', (chunk: string) => {
-        const nlIdx = chunk.indexOf('\n');
+      let data = "";
+      process.stdin.setEncoding("utf-8");
+      process.stdin.on("data", (chunk: string) => {
+        const nlIdx = chunk.indexOf("\n");
         if (nlIdx >= 0) {
           data += chunk.slice(0, nlIdx);
           process.stdin.pause();
@@ -26,7 +26,7 @@ function readPasswordFromTTY(prompt: string): Promise<string> {
           data += chunk;
         }
       });
-      process.stdin.on('end', () => resolve(data));
+      process.stdin.on("end", () => resolve(data));
       process.stdin.resume();
       return;
     }
@@ -35,57 +35,57 @@ function readPasswordFromTTY(prompt: string): Promise<string> {
     const buf: string[] = [];
 
     process.stdin.setRawMode(true);
-    process.stdin.setEncoding('utf-8');
+    process.stdin.setEncoding("utf-8");
     process.stdin.resume();
 
     const onData = (ch: string) => {
-      if (ch === '\u0003') {
+      if (ch === "\u0003") {
         // Ctrl+C
-        process.stderr.write('\n');
+        process.stderr.write("\n");
         process.stdin.setRawMode(false);
         process.stdin.pause();
-        process.stdin.removeListener('data', onData);
+        process.stdin.removeListener("data", onData);
         process.exit(130);
-      } else if (ch === '\r' || ch === '\n') {
+      } else if (ch === "\r" || ch === "\n") {
         // Enter
-        process.stderr.write('\n');
+        process.stderr.write("\n");
         process.stdin.setRawMode(false);
         process.stdin.pause();
-        process.stdin.removeListener('data', onData);
-        resolve(buf.join(''));
-      } else if (ch === '\u007F' || ch === '\b') {
+        process.stdin.removeListener("data", onData);
+        resolve(buf.join(""));
+      } else if (ch === "\u007F" || ch === "\b") {
         // Backspace
         buf.pop();
-      } else if (ch === '\u0004') {
+      } else if (ch === "\u0004") {
         // Ctrl+D (EOF)
-        process.stderr.write('\n');
+        process.stderr.write("\n");
         process.stdin.setRawMode(false);
         process.stdin.pause();
-        process.stdin.removeListener('data', onData);
-        resolve(buf.join(''));
-      } else if (ch >= ' ') {
+        process.stdin.removeListener("data", onData);
+        resolve(buf.join(""));
+      } else if (ch >= " ") {
         buf.push(ch);
       }
     };
 
-    process.stdin.on('data', onData);
+    process.stdin.on("data", onData);
   });
 }
 
-async function getPassword(prompt = 'Password: '): Promise<string> {
-  const envPassword = process.env['MDENC_PASSWORD'];
+async function getPassword(prompt = "Password: "): Promise<string> {
+  const envPassword = process.env["MDENC_PASSWORD"];
   if (envPassword) return envPassword;
 
   return readPasswordFromTTY(prompt);
 }
 
 async function getPasswordWithConfirmation(): Promise<string> {
-  if (process.env['MDENC_PASSWORD']) return process.env['MDENC_PASSWORD'];
+  if (process.env["MDENC_PASSWORD"]) return process.env["MDENC_PASSWORD"];
 
-  const password = await readPasswordFromTTY('Password: ');
-  const confirm = await readPasswordFromTTY('Confirm password: ');
+  const password = await readPasswordFromTTY("Password: ");
+  const confirm = await readPasswordFromTTY("Confirm password: ");
   if (password !== confirm) {
-    console.error('Error: passwords do not match');
+    console.error("Error: passwords do not match");
     process.exit(1);
   }
   return password;
@@ -121,13 +121,13 @@ async function main(): Promise<void> {
 
   try {
     switch (command) {
-      case 'encrypt': {
+      case "encrypt": {
         if (!args[1]) usage();
         const inputFile = args[1];
-        const outputIdx = args.indexOf('-o');
+        const outputIdx = args.indexOf("-o");
         const outputFile = outputIdx >= 0 ? args[outputIdx + 1] : undefined;
         const password = await getPasswordWithConfirmation();
-        const plaintext = readFileSync(inputFile, 'utf-8');
+        const plaintext = readFileSync(inputFile, "utf-8");
         const encrypted = await encrypt(plaintext, password);
         if (outputFile) {
           writeFileSync(outputFile, encrypted);
@@ -137,13 +137,13 @@ async function main(): Promise<void> {
         break;
       }
 
-      case 'decrypt': {
+      case "decrypt": {
         if (!args[1]) usage();
         const inputFile = args[1];
-        const outputIdx = args.indexOf('-o');
+        const outputIdx = args.indexOf("-o");
         const outputFile = outputIdx >= 0 ? args[outputIdx + 1] : undefined;
         const password = await getPassword();
-        const fileContent = readFileSync(inputFile, 'utf-8');
+        const fileContent = readFileSync(inputFile, "utf-8");
         const decrypted = await decrypt(fileContent, password);
         if (outputFile) {
           writeFileSync(outputFile, decrypted);
@@ -153,63 +153,63 @@ async function main(): Promise<void> {
         break;
       }
 
-      case 'verify': {
+      case "verify": {
         if (!args[1]) usage();
         const inputFile = args[1];
         const password = await getPassword();
-        const fileContent = readFileSync(inputFile, 'utf-8');
+        const fileContent = readFileSync(inputFile, "utf-8");
         const valid = await verifySeal(fileContent, password);
         if (valid) {
-          console.error('Seal verified: OK');
+          console.error("Seal verified: OK");
           process.exit(0);
         } else {
-          console.error('Seal verification FAILED');
+          console.error("Seal verification FAILED");
           process.exit(1);
         }
         break;
       }
 
-      case 'init':
+      case "init":
         await initCommand();
         break;
 
-      case 'mark': {
+      case "mark": {
         if (!args[1]) {
-          console.error('Usage: mdenc mark <directory>');
+          console.error("Usage: mdenc mark <directory>");
           process.exit(1);
         }
         markCommand(args[1]);
         break;
       }
 
-      case 'status':
+      case "status":
         statusCommand();
         break;
 
-      case 'remove-filter':
+      case "remove-filter":
         removeFilterCommand();
         break;
 
-      case 'genpass':
-        genpassCommand(args.includes('--force'));
+      case "genpass":
+        genpassCommand(args.includes("--force"));
         break;
 
       // Git filter commands (called by git, not directly by user)
-      case 'filter-process':
+      case "filter-process":
         await filterProcessMain();
         break;
 
-      case 'filter-clean':
-        await simpleCleanFilter(args[1] ?? '');
+      case "filter-clean":
+        await simpleCleanFilter(args[1] ?? "");
         break;
 
-      case 'filter-smudge':
+      case "filter-smudge":
         await simpleSmudgeFilter();
         break;
 
-      case 'textconv':
+      case "textconv":
         if (!args[1]) {
-          console.error('Usage: mdenc textconv <file>');
+          console.error("Usage: mdenc textconv <file>");
           process.exit(1);
         }
         await textconvCommand(args[1]);

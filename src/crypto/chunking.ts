@@ -2,10 +2,10 @@ const DEFAULT_MAX_CHUNK_SIZE = 65536; // 64 KiB
 
 export function chunkByParagraph(text: string, maxSize = DEFAULT_MAX_CHUNK_SIZE): string[] {
   // Normalize line endings
-  const normalized = text.replace(/\r\n/g, '\n');
+  const normalized = text.replace(/\r\n/g, "\n");
 
   if (normalized.length === 0) {
-    return [''];
+    return [""];
   }
 
   // Split on runs of 2+ newlines, attaching each boundary to the preceding chunk
@@ -43,10 +43,10 @@ export function chunkByParagraph(text: string, maxSize = DEFAULT_MAX_CHUNK_SIZE)
 }
 
 export function chunkByFixedSize(text: string, size: number): string[] {
-  const normalized = text.replace(/\r\n/g, '\n');
+  const normalized = text.replace(/\r\n/g, "\n");
 
   if (normalized.length === 0) {
-    return [''];
+    return [""];
   }
 
   const bytes = new TextEncoder().encode(normalized);
@@ -62,7 +62,7 @@ export function chunkByFixedSize(text: string, size: number): string[] {
     // Avoid splitting in the middle of a multi-byte UTF-8 character
     let adjusted = end;
     if (adjusted < bytes.length) {
-      while (adjusted > offset && (bytes[adjusted] & 0xc0) === 0x80) {
+      while (adjusted > offset && (bytes[adjusted]! & 0xc0) === 0x80) {
         adjusted--;
       }
     }
@@ -86,7 +86,7 @@ function splitAtByteLimit(text: string, maxSize: number): string[] {
     let end = Math.min(offset + maxSize, bytes.length);
     // Avoid splitting multi-byte characters
     if (end < bytes.length) {
-      while (end > offset && (bytes[end] & 0xc0) === 0x80) {
+      while (end > offset && (bytes[end]! & 0xc0) === 0x80) {
         end--;
       }
     }

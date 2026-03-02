@@ -1,21 +1,21 @@
-import { hmac } from '@noble/hashes/hmac';
-import { sha256 } from '@noble/hashes/sha256';
-import { chunkByParagraph, chunkByFixedSize } from './chunking.js';
-import { deriveMasterKey, deriveKeys } from './kdf.js';
-import { encryptChunk, decryptChunk } from './aead.js';
+import { hmac } from "@noble/hashes/hmac";
+import { sha256 } from "@noble/hashes/sha256";
+import { decryptChunk, encryptChunk } from "./aead.js";
+import { chunkByFixedSize, chunkByParagraph } from "./chunking.js";
+import { constantTimeEqual, zeroize } from "./crypto-utils.js";
 import {
-  serializeHeader,
-  parseHeader,
   authenticateHeader,
-  verifyHeader,
-  generateSalt,
-  generateFileId,
-  toBase64,
   fromBase64,
-} from './header.js';
-import { ChunkingStrategy, DEFAULT_SCRYPT_PARAMS } from './types.js';
-import type { EncryptOptions, MdencHeader } from './types.js';
-import { constantTimeEqual, zeroize } from './crypto-utils.js';
+  generateFileId,
+  generateSalt,
+  parseHeader,
+  serializeHeader,
+  toBase64,
+  verifyHeader,
+} from "./header.js";
+import { deriveKeys, deriveMasterKey } from "./kdf.js";
+import type { EncryptOptions, MdencHeader } from "./types.js";
+import { ChunkingStrategy, DEFAULT_SCRYPT_PARAMS } from "./types.js";
 
 export async function encrypt(
   plaintext: string,
@@ -59,7 +59,7 @@ export async function encrypt(
 
   try {
     // Build header
-    const header: MdencHeader = { version: 'v1', salt, fileId, scrypt: scryptParams };
+    const header: MdencHeader = { version: "v1", salt, fileId, scrypt: scryptParams };
     const headerLine = serializeHeader(header);
     const headerHmac = authenticateHeader(headerKey, headerLine);
     const headerAuthLine = `hdrauth_b64=${toBase64(headerHmac)}`;
@@ -73,41 +73,38 @@ export async function encrypt(
     }
 
     // Compute seal HMAC over header + auth + chunk lines
-    const sealInput = headerLine + '\n' + headerAuthLine + '\n' + chunkLines.join('\n');
+    const sealInput = `${headerLine}\n${headerAuthLine}\n${chunkLines.join("\n")}`;
     const sealData = new TextEncoder().encode(sealInput);
     const sealHmac = hmac(sha256, headerKey, sealData);
     const sealLine = `seal_b64=${toBase64(sealHmac)}`;
 
-    return [headerLine, headerAuthLine, ...chunkLines, sealLine, ''].join('\n');
+    return [headerLine, headerAuthLine, ...chunkLines, sealLine, ""].join("\n");
   } finally {
     zeroize(masterKey, encKey, headerKey, nonceKey);
   }
 }
 
-export async function decrypt(
-  fileContent: string,
-  password: string,
-): Promise<string> {
-  const lines = fileContent.split('\n');
+export async function decrypt(fileContent: string, password: string): Promise<string> {
+  const lines = fileContent.split("\n");
 
   // Remove trailing empty line if present
-  if (lines.length > 0 && lines[lines.length - 1] === '') {
+  if (lines.length > 0 && lines[lines.length - 1] === "") {
     lines.pop();
   }
 
   if (lines.length < 3) {
-    throw new Error('Invalid mdenc file: too few lines');
+    throw new Error("Invalid mdenc file: too few lines");
   }
 
   // Parse header
-  const headerLine = lines[0];
+  const headerLine = lines[0]!;
   const header = parseHeader(headerLine);
 
   // Parse header auth
-  const authLine = lines[1];
+  const authLine = lines[1]!;
   const authMatch = authLine.match(/^hdrauth_b64=([A-Za-z0-9+/=]+)$/);
-  if (!authMatch) {
-    throw new Error('Invalid mdenc file: missing hdrauth_b64 line');
+  if (!authMatch?.[1]) {
+    throw new Error("Invalid mdenc file: missing hdrauth_b64 line");
   }
   const headerHmac = fromBase64(authMatch[1]);
 
@@ -118,31 +115,32 @@ export async function decrypt(
   try {
     // Verify header HMAC
     if (!verifyHeader(headerKey, headerLine, headerHmac)) {
-      throw new Error('Header authentication failed (wrong password or tampered header)');
+      throw new Error("Header authentication failed (wrong password or tampered header)");
     }
 
     // Collect chunk lines and seal line
     const remaining = lines.slice(2);
-    const sealIndex = remaining.findIndex(l => l.startsWith('seal_b64='));
+    const sealIndex = remaining.findIndex((l) => l.startsWith("seal_b64="));
     if (sealIndex < 0) {
-      throw new Error('Invalid mdenc file: missing seal');
+      throw new Error("Invalid mdenc file: missing seal");
     }
 
     const chunkLines = remaining.slice(0, sealIndex);
     if (chunkLines.length === 0) {
-      throw new Error('Invalid mdenc file: no chunk lines');
+      throw new Error("Invalid mdenc file: no chunk lines");
     }
 
     // Verify seal HMAC
-    const sealMatch = remaining[sealIndex].match(/^seal_b64=([A-Za-z0-9+/=]+)$/);
-    if (!sealMatch) throw new Error('Invalid mdenc file: malformed seal line');
+    const sealLine = remaining[sealIndex]!;
+    const sealMatch = sealLine.match(/^seal_b64=([A-Za-z0-9+/=]+)$/);
+    if (!sealMatch?.[1]) throw new Error("Invalid mdenc file: malformed seal line");
     const storedSealHmac = fromBase64(sealMatch[1]);
 
-    const sealInput = headerLine + '\n' + authLine + '\n' + chunkLines.join('\n');
+    const sealInput = `${headerLine}\n${authLine}\n${chunkLines.join("\n")}`;
     const sealData = new TextEncoder().encode(sealInput);
     const computedSealHmac = hmac(sha256, headerKey, sealData);
     if (!constantTimeEqual(computedSealHmac, storedSealHmac)) {
-      throw new Error('Seal verification failed (file tampered or chunks reordered)');
+      throw new Error("Seal verification failed (file tampered or chunks reordered)");
     }
 
     // Decrypt chunks
@@ -153,7 +151,7 @@ export async function decrypt(
       plaintextParts.push(new TextDecoder().decode(decrypted));
     }
 
-    return plaintextParts.join('');
+    return plaintextParts.join("");
   } finally {
     zeroize(masterKey, encKey, headerKey, nonceKey);
   }
@@ -164,17 +162,17 @@ function parsePreviousFileHeader(
   password: string,
 ): { salt: Uint8Array; fileId: Uint8Array; masterKey: Uint8Array } | undefined {
   try {
-    const lines = fileContent.split('\n');
-    if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+    const lines = fileContent.split("\n");
+    if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
     if (lines.length < 3) return undefined;
 
-    const headerLine = lines[0];
+    const headerLine = lines[0]!;
     const header = parseHeader(headerLine);
 
     // Parse and verify header HMAC before trusting
-    const authLine = lines[1];
+    const authLine = lines[1]!;
     const authMatch = authLine.match(/^hdrauth_b64=([A-Za-z0-9+/=]+)$/);
-    if (!authMatch) return undefined;
+    if (!authMatch?.[1]) return undefined;
     const headerHmac = fromBase64(authMatch[1]);
 
     const masterKey = deriveMasterKey(password, header.salt, header.scrypt);

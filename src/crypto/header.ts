@@ -1,9 +1,9 @@
-import { hmac } from '@noble/hashes/hmac';
-import { sha256 } from '@noble/hashes/sha256';
-import { randomBytes } from '@noble/ciphers/webcrypto';
-import type { MdencHeader, ScryptParams } from './types.js';
-import { SCRYPT_BOUNDS } from './types.js';
-import { constantTimeEqual } from './crypto-utils.js';
+import { randomBytes } from "@noble/ciphers/webcrypto";
+import { hmac } from "@noble/hashes/hmac";
+import { sha256 } from "@noble/hashes/sha256";
+import { constantTimeEqual } from "./crypto-utils.js";
+import type { MdencHeader, ScryptParams } from "./types.js";
+import { SCRYPT_BOUNDS } from "./types.js";
 
 export function generateSalt(): Uint8Array {
   return randomBytes(16);
@@ -21,22 +21,23 @@ export function serializeHeader(header: MdencHeader): string {
 }
 
 export function parseHeader(line: string): MdencHeader {
-  if (!line.startsWith('mdenc:v1 ')) {
-    throw new Error('Invalid header: missing mdenc:v1 prefix');
+  if (!line.startsWith("mdenc:v1 ")) {
+    throw new Error("Invalid header: missing mdenc:v1 prefix");
   }
 
   const saltMatch = line.match(/salt_b64=([A-Za-z0-9+/=]+)/);
-  if (!saltMatch) throw new Error('Invalid header: missing salt_b64');
+  if (!saltMatch?.[1]) throw new Error("Invalid header: missing salt_b64");
   const salt = fromBase64(saltMatch[1]);
-  if (salt.length !== 16) throw new Error('Invalid header: salt must be 16 bytes');
+  if (salt.length !== 16) throw new Error("Invalid header: salt must be 16 bytes");
 
   const fileIdMatch = line.match(/file_id_b64=([A-Za-z0-9+/=]+)/);
-  if (!fileIdMatch) throw new Error('Invalid header: missing file_id_b64');
+  if (!fileIdMatch?.[1]) throw new Error("Invalid header: missing file_id_b64");
   const fileId = fromBase64(fileIdMatch[1]);
-  if (fileId.length !== 16) throw new Error('Invalid header: file_id must be 16 bytes');
+  if (fileId.length !== 16) throw new Error("Invalid header: file_id must be 16 bytes");
 
   const scryptMatch = line.match(/scrypt=N=(\d+),r=(\d+),p=(\d+)/);
-  if (!scryptMatch) throw new Error('Invalid header: missing scrypt parameters');
+  if (!scryptMatch?.[1] || !scryptMatch[2] || !scryptMatch[3])
+    throw new Error("Invalid header: missing scrypt parameters");
   const scryptParams: ScryptParams = {
     N: parseInt(scryptMatch[1], 10),
     r: parseInt(scryptMatch[2], 10),
@@ -45,7 +46,7 @@ export function parseHeader(line: string): MdencHeader {
 
   validateScryptParams(scryptParams);
 
-  return { version: 'v1', salt, fileId, scrypt: scryptParams };
+  return { version: "v1", salt, fileId, scrypt: scryptParams };
 }
 
 export function validateScryptParams(params: ScryptParams): void {
@@ -79,9 +80,18 @@ export function verifyHeader(
 }
 
 export function toBase64(bytes: Uint8Array): string {
-  return Buffer.from(bytes).toString('base64');
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]!);
+  }
+  return btoa(binary);
 }
 
 export function fromBase64(b64: string): Uint8Array {
-  return new Uint8Array(Buffer.from(b64, 'base64'));
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
 }
