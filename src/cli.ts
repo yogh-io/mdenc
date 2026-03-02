@@ -1,13 +1,13 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { decrypt, encrypt } from "./crypto/encrypt.js";
 import { verifySeal } from "./crypto/seal.js";
+import { diffDriverCommand } from "./git/diff-driver.js";
 import { simpleCleanFilter, simpleSmudgeFilter } from "./git/filter.js";
 import { filterProcessMain } from "./git/filter-process.js";
 import { genpassCommand } from "./git/genpass.js";
 import { initCommand, removeFilterCommand } from "./git/init.js";
 import { markCommand } from "./git/mark.js";
 import { statusCommand } from "./git/status.js";
-import { diffDriverCommand } from "./git/diff-driver.js";
 import { textconvCommand } from "./git/textconv.js";
 
 function readPasswordFromTTY(prompt: string): Promise<string> {
@@ -92,8 +92,7 @@ async function getPasswordWithConfirmation(): Promise<string> {
   return password;
 }
 
-function usage(): never {
-  console.error(`Usage:
+const USAGE = `Usage:
   mdenc encrypt <file> [-o output]    Encrypt a markdown file
   mdenc decrypt <file> [-o output]    Decrypt an mdenc file
   mdenc verify <file>                 Verify file integrity
@@ -110,8 +109,11 @@ Internal (called by git):
   mdenc filter-clean <path>           Single-file clean filter
   mdenc filter-smudge <path>          Single-file smudge filter
   mdenc textconv <file>               Output plaintext for git diff
-  mdenc diff-driver <path> ...        Custom diff driver (encrypted + plaintext)`);
-  process.exit(1);
+  mdenc diff-driver <path> ...        Custom diff driver (encrypted + plaintext)`;
+
+function usage(exitCode = 1): never {
+  console.error(USAGE);
+  process.exit(exitCode);
 }
 
 async function main(): Promise<void> {
@@ -120,6 +122,15 @@ async function main(): Promise<void> {
   if (args.length === 0) usage();
 
   const command = args[0];
+
+  if (command === "--help" || command === "-h") usage(0);
+
+  if (command === "--version" || command === "-v") {
+    const pkgPath = new URL("../package.json", import.meta.url);
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+    console.log(pkg.version);
+    return;
+  }
 
   try {
     switch (command) {
@@ -177,7 +188,7 @@ async function main(): Promise<void> {
 
       case "mark": {
         if (!args[1]) {
-          console.error("Usage: mdenc mark <directory>\n\nRun \"mdenc mark --help\" for details.");
+          console.error('Usage: mdenc mark <directory>\n\nRun "mdenc mark --help" for details.');
           process.exit(1);
         }
         markCommand(args[1]);

@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 /**
  * Custom git diff driver. Shows the encrypted diff first (so you can confirm
@@ -39,7 +39,6 @@ export async function diffDriverCommand(args: string[]): Promise<void> {
     } finally {
       rmSync(tmp, { recursive: true });
     }
-
   }
 
   // Plaintext diff (git already smudge-decrypted the files for us)
@@ -71,12 +70,15 @@ function unifiedDiff(
   newLabel: string,
 ): string | null {
   try {
-    return execFileSync("diff", ["-u", "--label", oldLabel, "--label", newLabel, oldFile, newFile], {
-      encoding: "utf-8",
-    }) || null;
-  } catch (e: any) {
+    return (
+      execFileSync("diff", ["-u", "--label", oldLabel, "--label", newLabel, oldFile, newFile], {
+        encoding: "utf-8",
+      }) || null
+    );
+  } catch (e: unknown) {
     // diff exits 1 when files differ (normal)
-    if (e.status === 1 && e.stdout) return e.stdout;
+    const err = e as { status?: number; stdout?: string };
+    if (err.status === 1 && err.stdout) return err.stdout;
     return null;
   }
 }

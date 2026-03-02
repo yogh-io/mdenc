@@ -9,7 +9,6 @@ interface FilterConfig {
   clean: string | null;
   smudge: string | null;
   required: boolean;
-  textconv: string | null;
 }
 
 function getFilterConfig(repoRoot: string): FilterConfig {
@@ -30,7 +29,6 @@ function getFilterConfig(repoRoot: string): FilterConfig {
     clean: get("filter.mdenc.clean"),
     smudge: get("filter.mdenc.smudge"),
     required: get("filter.mdenc.required") === "true",
-    textconv: get("diff.mdenc.textconv"),
   };
 }
 

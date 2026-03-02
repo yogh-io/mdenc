@@ -2,6 +2,8 @@
 
 **Encrypt your Markdown. Keep your diffs.**
 
+[**Live Demo**](https://yogh-io.github.io/mdenc/) | [npm](https://www.npmjs.com/package/mdenc) | [Specification](SPECIFICATION.md) | [Security](SECURITY.md)
+
 mdenc lets you store encrypted Markdown in git without losing the ability to see *what changed*. Edit one paragraph, and only that paragraph changes in the encrypted output. Your `git log` stays useful. Your pull request reviews stay sane.
 
 ## What it looks like
@@ -111,9 +113,7 @@ mdenc status
 mdenc remove-filter
 ```
 
-After `mdenc init` and `mdenc mark`, the workflow is transparent: the **clean filter** encrypts `.md` files when they're staged (`git add`), and the **smudge filter** decrypts them on checkout. You always see plaintext in your working directory. The `textconv` driver lets `git diff` show plaintext diffs of encrypted content.
-
-> **[Try the demo](https://yogh-io.github.io/mdenc/)** -- encrypt and decrypt Markdown in the browser.
+After `mdenc init` and `mdenc mark`, the workflow is transparent: the **clean filter** encrypts `.md` files when they're staged (`git add`), and the **smudge filter** decrypts them on checkout. You always see plaintext in your working directory. The custom diff driver shows plaintext diffs of encrypted content.
 
 ## Library
 
