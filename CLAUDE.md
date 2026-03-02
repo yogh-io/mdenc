@@ -24,6 +24,11 @@ npm run release:major    # Major bump
 
 GitHub Actions (`.github/workflows/release.yml`) publishes to npm on `v*` tag push.
 
+## Key Documentation
+
+- **SPECIFICATION.md** — Full cryptographic spec: file format, key derivation, AAD, chunking, security properties
+- **SECURITY.md** — Threat model, crypto details, accepted tradeoffs
+
 ## Architecture
 
 mdenc encrypts Markdown at **paragraph granularity** so unchanged paragraphs produce identical ciphertext, enabling clean git diffs. The encryption is deterministic: same plaintext + same password + same salt = same output.
