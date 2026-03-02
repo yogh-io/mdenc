@@ -266,6 +266,16 @@ body {
   color: var(--text);
 }
 
+.about-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.about-link:hover {
+  text-decoration: underline;
+}
+
 /* --- Help overlay --- */
 .help-overlay {
   position: fixed;

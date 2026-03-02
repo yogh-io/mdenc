@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mdenc — About</title>
+    <link rel="stylesheet" href="/src/about.css" />
+  </head>
+  <body>
+    <nav>
+      <a href="/" class="back">&larr; back to editor</a>
+      <span class="nav-title">mdenc</span>
+      <a href="https://github.com/jornb/mdenc" target="_blank" rel="noopener">github</a>
+    </nav>
+
+    <main>
+      <h1>mdenc</h1>
+      <p class="lead">Encrypt your Markdown. Keep your diffs.</p>
+
+      <p>
+        mdenc lets you store encrypted Markdown in git without losing the
+        ability to see <em>what changed</em>. Edit one paragraph, and only
+        that paragraph changes in the encrypted output. Your git log stays
+        useful. Your pull request reviews stay sane.
+      </p>
+
+      <h2>What it looks like</h2>
+
+      <p>Say you have some private notes:</p>
+
+      <pre><code># Meeting Notes
+
+Discussed the Q3 roadmap. We agreed to prioritize
+the mobile app rewrite.
+
+## Action Items
+
+Alice will draft the technical spec by Friday.
+Bob is handling the database migration plan.
+
+## Budget
+
+Total allocated: $450k for the quarter.</code></pre>
+
+      <p><code>mdenc encrypt notes.md -o notes.mdenc</code> turns it into:</p>
+
+      <pre><code>mdenc:v1 salt_b64=1z94qTI8... file_id_b64=eLP+c5cP... scrypt=N=16384,r=8,p=1
+hdrauth_b64=griicznFYhBTVCeq1lpvB+J73wsJJbheGghxNOIJlu0=
+Qnp4sPf/aN1z/VSkZ8yjGWwk0ZLqwpFAJB...    &larr; # Meeting Notes
+nD1KIHOMX5VhlSU4USUxWHTrl2Qi6cev/b6...    &larr; Discussed the Q3...
+Hes/oW+FeONHytgUa7c9ZzdF4d/w7Ei0tnG...    &larr; ## Action Items
+yT7vkHbaXHR390bWz1d/qcK6yVeF3p5/quv...    &larr; Alice will draft...
+dkM7awElU/pfUYs1goxQFlgcyUq8FNHcnZr...    &larr; ## Budget
+ZBRV9kdXm7gNiF4BvI9eklrtTjhkI9tLHu0...    &larr; Total allocated...
+seal_b64=29ylXnDTWQ09nzZjvoYtYUpfyr4X4NLONxpT/HOC9TU=</code></pre>
+
+      <p>
+        Each paragraph becomes one line of base64. A seal HMAC at the end
+        protects the file's integrity.
+      </p>
+
+      <p>
+        Now edit one paragraph and re-encrypt. Here's the git diff &mdash;
+        one paragraph changed, one line in the diff:
+      </p>
+
+      <pre class="diff"><code> mdenc:v1 salt_b64=1z94qTI8... file_id_b64=eLP+c5cP...
+ hdrauth_b64=griicznFYhBTVCeq1lpvB+J73wsJJbheGghxNOIJlu0=
+ Qnp4sPf/aN1z/VSkZ8yjGWwk0ZLqwpFAJB...
+ nD1KIHOMX5VhlSU4USUxWHTrl2Qi6cev/b6...
+ Hes/oW+FeONHytgUa7c9ZzdF4d/w7Ei0tnG...
+<span class="diff-del">-yT7vkHbaXHR390bWz1d/qcK6yVeF3p5/quv...</span>
+<span class="diff-add">+1RgyC3rXcjykvoL0GgsQsHBmxy5axdD/tqM...</span>
+ dkM7awElU/pfUYs1goxQFlgcyUq8FNHcnZr...
+ ZBRV9kdXm7gNiF4BvI9eklrtTjhkI9tLHu0...
+<span class="diff-del">-seal_b64=29ylXnDTWQ09nzZjvoYtYUpfyr4X...</span>
+<span class="diff-add">+seal_b64=iNhYjNp69tyv4tkzgDJK5Fh2h1WL...</span></code></pre>
+
+      <p>
+        Compare that to GPG, where the entire file would show as changed.
+      </p>
+
+      <h2>Why</h2>
+
+      <p>
+        You want to keep private notes, journals, or sensitive docs in a git
+        repo. GPG-encrypting the whole file works, but every tiny edit
+        produces a completely different blob. The entire file shows as
+        changed in every commit.
+      </p>
+
+      <p>
+        mdenc encrypts at paragraph granularity. Unchanged paragraphs
+        produce identical ciphertext, so git only tracks the paragraphs you
+        actually touched.
+      </p>
+
+      <h2>Install</h2>
+
+      <pre><code>npm install -g mdenc</code></pre>
+
+      <h2>CLI</h2>
+
+      <pre><code># Encrypt
+mdenc encrypt notes.md -o notes.mdenc
+
+# Decrypt
+mdenc decrypt notes.mdenc -o notes.md
+
+# Re-encrypt (unchanged paragraphs keep same ciphertext)
+mdenc encrypt notes.md -o notes.mdenc
+
+# Verify file integrity
+mdenc verify notes.mdenc</code></pre>
+
+      <p>
+        Password is read from <code>MDENC_PASSWORD</code> env var or
+        prompted interactively.
+      </p>
+
+      <h2>Git integration</h2>
+
+      <pre><code># Set up smudge/clean filter
+mdenc init
+
+# Generate a random password
+mdenc genpass
+
+# Mark a directory for encryption
+mdenc mark docs/private
+
+# Check encryption status
+mdenc status</code></pre>
+
+      <p>
+        After <code>mdenc init</code> and <code>mdenc mark</code>, the
+        workflow is automatic: edit <code>.md</code> files normally, and
+        git's clean filter encrypts them on staging. The smudge filter
+        decrypts on checkout.
+      </p>
+
+      <h2>Library</h2>
+
+      <pre><code>import { encrypt, decrypt, verifySeal } from 'mdenc';
+
+// Encrypt
+const encrypted = await encrypt(markdown, password);
+
+// Decrypt (verifies seal automatically)
+const plaintext = await decrypt(encrypted, password);
+
+// Re-encrypt with diff optimization
+const updated = await encrypt(editedMarkdown, password, {
+  previousFile: encrypted,
+});
+
+// Verify integrity without decrypting
+const ok = await verifySeal(encrypted, password);</code></pre>
+
+      <h2>How it works</h2>
+
+      <ol>
+        <li>Markdown is split into chunks at paragraph boundaries (2+ newlines)</li>
+        <li>Each chunk is encrypted with XChaCha20-Poly1305 using a deterministic nonce derived from the content</li>
+        <li>The output is plain UTF-8 text &mdash; one base64 line per chunk, plus a seal HMAC</li>
+        <li>Same content + same keys = same ciphertext, so unchanged chunks produce identical output</li>
+        <li>The seal HMAC covers all lines, detecting reordering, truncation, and rollback</li>
+      </ol>
+
+      <p>
+        The password is stretched with scrypt (N=16384, r=8, p=1). Keys are
+        derived via HKDF-SHA256 with separate subkeys for encryption,
+        header authentication, and nonce derivation.
+      </p>
+
+      <h2>What leaks</h2>
+
+      <p>
+        mdenc is designed for diff-friendliness, not metadata hiding.
+        An observer can see:
+      </p>
+
+      <ul>
+        <li>How many paragraphs your document has</li>
+        <li>Approximate size of each paragraph</li>
+        <li>Which paragraphs changed between commits</li>
+        <li>Identical paragraphs (they produce identical ciphertext)</li>
+      </ul>
+
+      <p>The <em>content</em> of your paragraphs stays confidential.</p>
+
+      <h2>License</h2>
+
+      <p>ISC</p>
+    </main>
+  </body>
+</html>

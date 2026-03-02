@@ -1,0 +1,160 @@
+:root {
+  --bg: #0a0a0a;
+  --bg-surface: #111;
+  --border: #333;
+  --text: #ccc;
+  --text-muted: #555;
+  --text-bright: #eee;
+  --accent: #4ec9b0;
+  --error: #f44;
+  --font: "SF Mono", "Cascadia Code", "JetBrains Mono", "Fira Code",
+    Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.7;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* --- Nav bar --- */
+nav {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 24px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  z-index: 1;
+}
+
+nav a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+nav a:hover {
+  text-decoration: underline;
+}
+
+.nav-title {
+  color: var(--accent);
+  font-weight: bold;
+  letter-spacing: 0.05em;
+}
+
+.back {
+  min-width: 140px;
+}
+
+/* --- Main content --- */
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 24px 96px;
+}
+
+h1 {
+  font-size: 28px;
+  color: var(--text-bright);
+  margin-bottom: 4px;
+}
+
+.lead {
+  font-size: 16px;
+  color: var(--accent);
+  margin-bottom: 32px;
+}
+
+h2 {
+  font-size: 17px;
+  color: var(--text-bright);
+  margin-top: 40px;
+  margin-bottom: 12px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+p {
+  margin-bottom: 12px;
+}
+
+em {
+  color: var(--text-bright);
+  font-style: italic;
+}
+
+code {
+  font-family: var(--font);
+  font-size: 13px;
+  background: var(--bg-surface);
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+}
+
+pre {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  padding: 12px 16px;
+  margin: 8px 0 16px;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+pre code {
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+/* Diff highlighting */
+.diff-del {
+  color: #f87171;
+}
+
+.diff-add {
+  color: #34d399;
+}
+
+ol,
+ul {
+  margin: 8px 0 16px 24px;
+}
+
+li {
+  margin-bottom: 4px;
+}
+
+strong {
+  color: var(--text-bright);
+}
+
+/* --- Responsive --- */
+@media (max-width: 768px) {
+  main {
+    padding: 32px 16px 64px;
+  }
+
+  nav {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .back {
+    min-width: unset;
+  }
+}
