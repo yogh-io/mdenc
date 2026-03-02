@@ -29,7 +29,7 @@ describe("mdenc init", () => {
     expect(gitConfig(repo.path, "filter.mdenc.clean")).toBe("mdenc filter-clean %f");
     expect(gitConfig(repo.path, "filter.mdenc.smudge")).toBe("mdenc filter-smudge %f");
     expect(gitConfig(repo.path, "filter.mdenc.required")).toBe("true");
-    expect(gitConfig(repo.path, "diff.mdenc.textconv")).toBe("mdenc textconv");
+    expect(gitConfig(repo.path, "diff.mdenc.command")).toBe("mdenc diff-driver");
   });
 
   it("adds .mdenc-password to .gitignore", () => {
@@ -80,7 +80,7 @@ describe("mdenc remove-filter", () => {
 
     expect(gitConfig(repo.path, "filter.mdenc.process")).toBeNull();
     expect(gitConfig(repo.path, "filter.mdenc.required")).toBeNull();
-    expect(gitConfig(repo.path, "diff.mdenc.textconv")).toBeNull();
+    expect(gitConfig(repo.path, "diff.mdenc.command")).toBeNull();
   });
 
   it("is safe to run when no filter is configured", () => {
