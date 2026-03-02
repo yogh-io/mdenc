@@ -175,7 +175,7 @@ async function main(): Promise<void> {
 
       case "mark": {
         if (!args[1]) {
-          console.error("Usage: mdenc mark <directory>");
+          console.error("Usage: mdenc mark <directory>\n\nRun \"mdenc mark --help\" for details.");
           process.exit(1);
         }
         markCommand(args[1]);

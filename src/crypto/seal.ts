@@ -20,7 +20,7 @@ export async function verifySeal(fileContent: string, password: string): Promise
 
   // Derive keys
   const masterKey = deriveMasterKey(password, header.salt, header.scrypt);
-  const { headerKey, nonceKey } = deriveKeys(masterKey);
+  const { encKey, headerKey, nonceKey } = deriveKeys(masterKey);
 
   try {
     // Verify header
@@ -48,6 +48,6 @@ export async function verifySeal(fileContent: string, password: string): Promise
 
     return constantTimeEqual(computed, storedHmac);
   } finally {
-    zeroize(masterKey, headerKey, nonceKey);
+    zeroize(masterKey, encKey, headerKey, nonceKey);
   }
 }

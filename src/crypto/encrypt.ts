@@ -176,14 +176,14 @@ function parsePreviousFileHeader(
     const headerHmac = fromBase64(authMatch[1]);
 
     const masterKey = deriveMasterKey(password, header.salt, header.scrypt);
-    const { headerKey } = deriveKeys(masterKey);
+    const { encKey, headerKey, nonceKey } = deriveKeys(masterKey);
 
     if (!verifyHeader(headerKey, headerLine, headerHmac)) {
-      zeroize(masterKey, headerKey);
+      zeroize(masterKey, encKey, headerKey, nonceKey);
       return undefined;
     }
 
-    zeroize(headerKey);
+    zeroize(encKey, headerKey, nonceKey);
     // Return masterKey for reuse — same password + same salt produces the same key,
     // so the caller can skip a redundant scrypt derivation.
     return { salt: header.salt, fileId: header.fileId, masterKey };
