@@ -1,16 +1,10 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
-import {
-  findGitRoot,
-  getMdFilesInDir,
-  gitAdd,
-  gitRmCached,
-  isFileTracked,
-} from './utils.js';
+import { findGitRoot, gitAdd } from './utils.js';
 
 const MARKER_FILE = '.mdenc.conf';
 const MARKER_CONTENT = '# mdenc: .md files in this directory are automatically encrypted\n';
-const GITIGNORE_PATTERN = '*.md';
+const GITATTR_PATTERN = '*.md filter=mdenc diff=mdenc';
 
 export function markCommand(dirArg: string): void {
   const repoRoot = findGitRoot();
@@ -38,43 +32,25 @@ export function markCommand(dirArg: string): void {
     console.log(`${relDir}/${MARKER_FILE} already exists (skipped)`);
   }
 
-  // Create/update .gitignore
-  const gitignorePath = join(dir, '.gitignore');
-  if (existsSync(gitignorePath)) {
-    const content = readFileSync(gitignorePath, 'utf-8');
-    const lines = content.split('\n').map(l => l.trim());
-    if (!lines.includes(GITIGNORE_PATTERN)) {
-      writeFileSync(gitignorePath, content.trimEnd() + '\n' + GITIGNORE_PATTERN + '\n');
-      console.log(`Updated ${relDir}/.gitignore (added ${GITIGNORE_PATTERN})`);
+  // Create/update .gitattributes
+  const gitattrsPath = join(dir, '.gitattributes');
+  if (existsSync(gitattrsPath)) {
+    const content = readFileSync(gitattrsPath, 'utf-8');
+    if (content.includes('filter=mdenc')) {
+      console.log(`${relDir}/.gitattributes already has filter=mdenc (skipped)`);
     } else {
-      console.log(`${relDir}/.gitignore already has ${GITIGNORE_PATTERN} (skipped)`);
+      writeFileSync(gitattrsPath, content.trimEnd() + '\n' + GITATTR_PATTERN + '\n');
+      console.log(`Updated ${relDir}/.gitattributes`);
     }
   } else {
-    writeFileSync(gitignorePath, GITIGNORE_PATTERN + '\n');
-    console.log(`Created ${relDir}/.gitignore with ${GITIGNORE_PATTERN}`);
+    writeFileSync(gitattrsPath, GITATTR_PATTERN + '\n');
+    console.log(`Created ${relDir}/.gitattributes`);
   }
 
-  // Untrack any currently-tracked .md files
-  const mdFiles = getMdFilesInDir(dir);
-  const trackedMd: string[] = [];
-  for (const f of mdFiles) {
-    const relPath = relative(repoRoot, join(dir, f));
-    if (isFileTracked(repoRoot, relPath)) {
-      trackedMd.push(relPath);
-    }
-  }
-
-  if (trackedMd.length > 0) {
-    gitRmCached(repoRoot, trackedMd);
-    for (const f of trackedMd) {
-      console.log(`Untracked ${f} from git (still exists locally)`);
-    }
-  }
-
-  // Stage .mdenc.conf and .gitignore
+  // Stage .mdenc.conf and .gitattributes
   const toStage = [
     relative(repoRoot, confPath),
-    relative(repoRoot, gitignorePath),
+    relative(repoRoot, gitattrsPath),
   ];
   gitAdd(repoRoot, toStage);
 

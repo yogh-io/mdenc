@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { readdirSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 
 const SKIP_DIRS = new Set(['.git', 'node_modules', '.hg', '.svn']);
 const MARKER_FILE = '.mdenc.conf';
@@ -16,15 +16,15 @@ export function findGitRoot(): string {
   }
 }
 
-export function getHooksDir(): string {
+export function gitShow(repoRoot: string, ref: string, path: string): string | undefined {
   try {
-    const gitDir = execFileSync('git', ['rev-parse', '--git-path', 'hooks'], {
+    return execFileSync('git', ['show', `${ref}:${path}`], {
+      cwd: repoRoot,
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim();
-    return resolve(gitDir);
+    });
   } catch {
-    throw new Error('Could not determine git hooks directory');
+    return undefined;
   }
 }
 

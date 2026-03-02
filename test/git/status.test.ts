@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'bun:test';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { createTempGitRepo, mdenc, git, type TempGitRepo } from './helpers.js';
+import { createTempGitRepo, mdenc, type TempGitRepo } from './helpers.js';
 
 describe('mdenc status', () => {
   let repo: TempGitRepo;
@@ -15,43 +15,21 @@ describe('mdenc status', () => {
     expect(output).toContain('No directories marked');
   });
 
-  it('shows marked directory with file states', () => {
+  it('shows marked directory and filter status', () => {
     repo = createTempGitRepo();
     const dir = join(repo.path, 'notes');
     mkdirSync(dir);
 
     mdenc(repo.path, ['init']);
     mdenc(repo.path, ['mark', dir]);
-    git(repo.path, ['commit', '-m', 'mark']);
-
-    // Create and encrypt a file
-    writeFileSync(join(dir, 'test.md'), '# Hello\n');
-    mdenc(repo.path, ['pre-commit']);
 
     const output = mdenc(repo.path, ['status']);
     expect(output).toContain('notes/');
-    expect(output).toContain('up to date');
-    expect(output).toContain('Hooks: all installed');
+    expect(output).toContain('Filter: configured');
     expect(output).toContain('Password: available');
   });
 
-  it('shows files needing encryption', () => {
-    repo = createTempGitRepo();
-    const dir = join(repo.path, 'notes');
-    mkdirSync(dir);
-
-    mdenc(repo.path, ['init']);
-    mdenc(repo.path, ['mark', dir]);
-    git(repo.path, ['commit', '-m', 'mark']);
-
-    // Create .md without encrypting
-    writeFileSync(join(dir, 'new.md'), '# New\n');
-
-    const output = mdenc(repo.path, ['status']);
-    expect(output).toContain('not yet encrypted');
-  });
-
-  it('shows missing hooks', () => {
+  it('shows unconfigured filter', () => {
     repo = createTempGitRepo();
     const dir = join(repo.path, 'notes');
     mkdirSync(dir);
@@ -59,7 +37,7 @@ describe('mdenc status', () => {
     mdenc(repo.path, ['mark', dir]);
 
     const output = mdenc(repo.path, ['status']);
-    expect(output).toContain('MISSING');
+    expect(output).toContain('NOT CONFIGURED');
   });
 
   it('shows missing password', () => {
@@ -68,5 +46,19 @@ describe('mdenc status', () => {
 
     const output = mdenc(repo.path, ['status'], { MDENC_PASSWORD: '' });
     expect(output).toContain('NOT AVAILABLE');
+  });
+
+  it('shows plaintext .md files', () => {
+    repo = createTempGitRepo();
+    const dir = join(repo.path, 'notes');
+    mkdirSync(dir);
+
+    mdenc(repo.path, ['init']);
+    mdenc(repo.path, ['mark', dir]);
+    writeFileSync(join(dir, 'test.md'), '# Hello\n');
+
+    const output = mdenc(repo.path, ['status']);
+    expect(output).toContain('test.md');
+    expect(output).toContain('plaintext');
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'bun:test';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createTempGitRepo, mdenc, git, type TempGitRepo } from './helpers.js';
 
@@ -8,7 +8,7 @@ describe('mdenc mark', () => {
 
   afterEach(() => repo?.cleanup());
 
-  it('creates .mdenc.conf and .gitignore', () => {
+  it('creates .mdenc.conf and .gitattributes', () => {
     repo = createTempGitRepo();
     const dir = join(repo.path, 'notes');
     mkdirSync(dir);
@@ -16,13 +16,13 @@ describe('mdenc mark', () => {
     mdenc(repo.path, ['mark', dir]);
 
     expect(existsSync(join(dir, '.mdenc.conf'))).toBe(true);
-    expect(existsSync(join(dir, '.gitignore'))).toBe(true);
+    expect(existsSync(join(dir, '.gitattributes'))).toBe(true);
 
-    const gitignore = readFileSync(join(dir, '.gitignore'), 'utf-8');
-    expect(gitignore).toContain('*.md');
+    const gitattrs = readFileSync(join(dir, '.gitattributes'), 'utf-8');
+    expect(gitattrs).toContain('*.md filter=mdenc diff=mdenc');
   });
 
-  it('stages .mdenc.conf and .gitignore', () => {
+  it('stages .mdenc.conf and .gitattributes', () => {
     repo = createTempGitRepo();
     const dir = join(repo.path, 'notes');
     mkdirSync(dir);
@@ -31,28 +31,7 @@ describe('mdenc mark', () => {
 
     const staged = git(repo.path, ['diff', '--cached', '--name-only']);
     expect(staged).toContain('notes/.mdenc.conf');
-    expect(staged).toContain('notes/.gitignore');
-  });
-
-  it('untracks already-tracked .md files', () => {
-    repo = createTempGitRepo();
-    const dir = join(repo.path, 'notes');
-    mkdirSync(dir);
-
-    // Add and commit a .md file
-    writeFileSync(join(dir, 'secret.md'), '# Secret\n');
-    git(repo.path, ['add', 'notes/secret.md']);
-    git(repo.path, ['commit', '-m', 'add md']);
-
-    // Now mark the directory
-    mdenc(repo.path, ['mark', dir]);
-
-    // The .md file should be untracked but still exist on disk
-    expect(existsSync(join(dir, 'secret.md'))).toBe(true);
-
-    // Verify it's been removed from the index
-    const tracked = git(repo.path, ['ls-files', '--', 'notes/secret.md']).trim();
-    expect(tracked).toBe('');
+    expect(staged).toContain('notes/.gitattributes');
   });
 
   it('is idempotent', () => {
@@ -78,18 +57,19 @@ describe('mdenc mark', () => {
     }
   });
 
-  it('updates existing .gitignore without duplicating *.md', () => {
+  it('updates existing .gitattributes without duplicating', () => {
     repo = createTempGitRepo();
     const dir = join(repo.path, 'notes');
     mkdirSync(dir);
-    writeFileSync(join(dir, '.gitignore'), 'tmp/\n');
 
     mdenc(repo.path, ['mark', dir]);
+    git(repo.path, ['commit', '-m', 'mark']);
 
-    const gitignore = readFileSync(join(dir, '.gitignore'), 'utf-8');
-    expect(gitignore).toContain('tmp/');
-    expect(gitignore).toContain('*.md');
-    const count = (gitignore.match(/\*\.md/g) || []).length;
+    // Run again
+    mdenc(repo.path, ['mark', dir]);
+
+    const gitattrs = readFileSync(join(dir, '.gitattributes'), 'utf-8');
+    const count = (gitattrs.match(/filter=mdenc/g) || []).length;
     expect(count).toBe(1);
   });
 });

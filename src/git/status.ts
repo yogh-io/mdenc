@@ -1,16 +1,38 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join, relative } from 'node:path';
 import { resolvePassword } from './password.js';
-import {
-  findGitRoot,
-  findMarkedDirs,
-  getHooksDir,
-  getMdFilesInDir,
-  getMdencFilesInDir,
-} from './utils.js';
+import { findGitRoot, findMarkedDirs, getMdFilesInDir } from './utils.js';
 
-const HOOK_NAMES = ['pre-commit', 'post-checkout', 'post-merge', 'post-rewrite'];
-const MARKER = '# mdenc-hook-marker';
+interface FilterConfig {
+  process: string | null;
+  clean: string | null;
+  smudge: string | null;
+  required: boolean;
+  textconv: string | null;
+}
+
+function getFilterConfig(repoRoot: string): FilterConfig {
+  const get = (key: string): string | null => {
+    try {
+      return execFileSync('git', ['config', '--get', key], {
+        cwd: repoRoot,
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      }).trim();
+    } catch {
+      return null;
+    }
+  };
+
+  return {
+    process: get('filter.mdenc.process'),
+    clean: get('filter.mdenc.clean'),
+    smudge: get('filter.mdenc.smudge'),
+    required: get('filter.mdenc.required') === 'true',
+    textconv: get('diff.mdenc.textconv'),
+  };
+}
 
 export function statusCommand(): void {
   const repoRoot = findGitRoot();
@@ -27,45 +49,29 @@ export function statusCommand(): void {
       const relDir = relative(repoRoot, dir) || '.';
       console.log(`  ${relDir}/`);
 
+      // List .md files and their state
       const mdFiles = getMdFilesInDir(dir);
-      const mdencFiles = getMdencFilesInDir(dir);
-
-      const mdBases = new Set(mdFiles.map(f => f.replace(/\.md$/, '')));
-      const mdencBases = new Set(mdencFiles.map(f => f.replace(/\.mdenc$/, '')));
-
-      // Paired files (both .md and .mdenc exist)
-      for (const base of mdBases) {
-        if (mdencBases.has(base)) {
-          const mdPath = join(dir, `${base}.md`);
-          const mdencPath = join(dir, `${base}.mdenc`);
-          const mdMtime = statSync(mdPath).mtimeMs;
-          const mdencMtime = statSync(mdencPath).mtimeMs;
-
-          if (mdMtime > mdencMtime) {
-            console.log(`    ${base}.md  [needs re-encryption]`);
-          } else {
-            console.log(`    ${base}.md  [up to date]`);
-          }
+      for (const f of mdFiles) {
+        const content = readFileSync(join(dir, f), 'utf-8');
+        if (content.startsWith('mdenc:v1')) {
+          console.log(`    ${f}  [encrypted — needs smudge]`);
         } else {
-          console.log(`    ${base}.md  [not yet encrypted]`);
+          console.log(`    ${f}  [plaintext]`);
         }
       }
 
-      // Orphaned .mdenc files (no corresponding .md)
-      for (const base of mdencBases) {
-        if (!mdBases.has(base)) {
-          console.log(`    ${base}.mdenc  [needs decryption]`);
-        }
+      if (mdFiles.length === 0) {
+        console.log('    (no .md files)');
       }
 
-      // Check .gitignore health
-      const gitignorePath = join(dir, '.gitignore');
-      if (!existsSync(gitignorePath)) {
-        console.log(`    WARNING: no .gitignore in this directory`);
+      // Check .gitattributes health
+      const gitattrsPath = join(dir, '.gitattributes');
+      if (!existsSync(gitattrsPath)) {
+        console.log('    WARNING: no .gitattributes in this directory');
       } else {
-        const content = readFileSync(gitignorePath, 'utf-8');
-        if (!content.split('\n').some(l => l.trim() === '*.md')) {
-          console.log(`    WARNING: .gitignore missing *.md pattern`);
+        const content = readFileSync(gitattrsPath, 'utf-8');
+        if (!content.includes('filter=mdenc')) {
+          console.log('    WARNING: .gitattributes missing filter=mdenc pattern');
         }
       }
 
@@ -81,25 +87,15 @@ export function statusCommand(): void {
     console.log('Password: available');
   }
 
-  // Hook status
-  const hooksDir = getHooksDir();
-  const missing: string[] = [];
-  for (const name of HOOK_NAMES) {
-    const hookPath = join(hooksDir, name);
-    if (!existsSync(hookPath)) {
-      missing.push(name);
-    } else {
-      const content = readFileSync(hookPath, 'utf-8');
-      if (!content.includes(MARKER)) {
-        missing.push(name);
-      }
-    }
-  }
-
-  if (missing.length > 0) {
-    console.log(`Hooks: MISSING (${missing.join(', ')})`);
-    console.log('  Run "mdenc init" to install hooks');
+  // Filter config status
+  const config = getFilterConfig(repoRoot);
+  if (!config.process && !config.clean) {
+    console.log('Filter: NOT CONFIGURED');
+    console.log('  Run "mdenc init" to configure');
   } else {
-    console.log('Hooks: all installed');
+    console.log('Filter: configured');
+    if (!config.required) {
+      console.log('  WARNING: filter.mdenc.required is not set to true');
+    }
   }
 }

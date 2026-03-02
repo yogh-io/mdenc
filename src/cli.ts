@@ -1,17 +1,13 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { encrypt, decrypt } from './encrypt.js';
 import { verifySeal } from './seal.js';
-import { initCommand, removeHooksCommand } from './git/init.js';
+import { initCommand, removeFilterCommand } from './git/init.js';
 import { markCommand } from './git/mark.js';
 import { statusCommand } from './git/status.js';
-import { watchCommand } from './git/watch.js';
 import { genpassCommand } from './git/genpass.js';
-import {
-  preCommitHook,
-  postCheckoutHook,
-  postMergeHook,
-  postRewriteHook,
-} from './git/hooks.js';
+import { simpleCleanFilter, simpleSmudgeFilter } from './git/filter.js';
+import { filterProcessMain } from './git/filter-process.js';
+import { textconvCommand } from './git/textconv.js';
 
 function readPasswordFromTTY(prompt: string): Promise<string> {
   return new Promise((resolve) => {
@@ -102,12 +98,17 @@ function usage(): never {
   mdenc verify <file>                 Verify file integrity
 
 Git integration:
-  mdenc init                          Set up git hooks for automatic encryption
+  mdenc init                          Set up git filter for automatic encryption
   mdenc mark <directory>              Mark a directory for encryption
   mdenc status                        Show encryption status
-  mdenc watch                         Watch and encrypt on file changes
-  mdenc remove-hooks                  Remove mdenc git hooks
-  mdenc genpass [--force]             Generate a random password into .mdenc-password`);
+  mdenc remove-filter                 Remove git filter configuration
+  mdenc genpass [--force]             Generate a random password into .mdenc-password
+
+Internal (called by git):
+  mdenc filter-process                Long-running filter process
+  mdenc filter-clean <path>           Single-file clean filter
+  mdenc filter-smudge <path>          Single-file smudge filter
+  mdenc textconv <file>               Output plaintext for git diff`);
   process.exit(1);
 }
 
@@ -185,33 +186,33 @@ async function main(): Promise<void> {
         statusCommand();
         break;
 
-      case 'watch':
-        await watchCommand();
-        break;
-
-      case 'remove-hooks':
-        removeHooksCommand();
+      case 'remove-filter':
+        removeFilterCommand();
         break;
 
       case 'genpass':
         genpassCommand(args.includes('--force'));
         break;
 
-      // Git hook handlers (called by hook scripts, not directly by user)
-      case 'pre-commit':
-        await preCommitHook();
+      // Git filter commands (called by git, not directly by user)
+      case 'filter-process':
+        await filterProcessMain();
         break;
 
-      case 'post-checkout':
-        await postCheckoutHook();
+      case 'filter-clean':
+        await simpleCleanFilter(args[1] ?? '');
         break;
 
-      case 'post-merge':
-        await postMergeHook();
+      case 'filter-smudge':
+        await simpleSmudgeFilter();
         break;
 
-      case 'post-rewrite':
-        await postRewriteHook();
+      case 'textconv':
+        if (!args[1]) {
+          console.error('Usage: mdenc textconv <file>');
+          process.exit(1);
+        }
+        await textconvCommand(args[1]);
         break;
 
       default:

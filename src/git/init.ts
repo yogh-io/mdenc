@@ -1,115 +1,47 @@
-import { readFileSync, writeFileSync, existsSync, chmodSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
-import { findGitRoot, getHooksDir } from './utils.js';
+import { findGitRoot, findMarkedDirs } from './utils.js';
 
-const MARKER = '# mdenc-hook-marker';
+const FILTER_CONFIGS: [string, string][] = [
+  ['filter.mdenc.process', 'mdenc filter-process'],
+  ['filter.mdenc.clean', 'mdenc filter-clean %f'],
+  ['filter.mdenc.smudge', 'mdenc filter-smudge %f'],
+  ['filter.mdenc.required', 'true'],
+  ['diff.mdenc.textconv', 'mdenc textconv'],
+];
 
-const HOOK_NAMES = [
-  'pre-commit',
-  'post-checkout',
-  'post-merge',
-  'post-rewrite',
-] as const;
-
-function hookBlock(hookName: string): string {
-  return `
-${MARKER}
-if command -v mdenc >/dev/null 2>&1; then
-  mdenc ${hookName}
-elif [ -x "./node_modules/.bin/mdenc" ]; then
-  ./node_modules/.bin/mdenc ${hookName}
-else
-  echo "mdenc: not found, skipping ${hookName} hook" >&2
-fi`;
-}
-
-function newHookScript(hookName: string): string {
-  return `#!/bin/sh${hookBlock(hookName)}
-`;
-}
-
-function isBinary(content: string): boolean {
-  return content.slice(0, 512).includes('\0');
-}
-
-function hasShellShebang(content: string): boolean {
-  const firstLine = content.split('\n')[0];
-  return /^#!.*\b(sh|bash|zsh|dash)\b/.test(firstLine);
-}
-
-function looksLikeFrameworkHook(content: string): boolean {
-  // Detect husky-style hooks that source/exec another script as their main logic
-  const lines = content.split('\n').filter(l => l.trim() && !l.startsWith('#'));
-  if (lines.length <= 2) {
-    // Very short hook that sources or execs something else
-    return lines.some(l => /^\.\s+"/.test(l.trim()) || /^exec\s+/.test(l.trim()));
+function configureGitFilter(repoRoot: string): void {
+  for (const [key, value] of FILTER_CONFIGS) {
+    execFileSync('git', ['config', '--local', key, value], {
+      cwd: repoRoot,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
   }
-  return false;
 }
 
-function printManualInstructions(hookName: string): void {
-  process.stderr.write(
-    `mdenc: ${hookName} hook exists but has an unrecognized format.\n` +
-      `       Add the following to your hook manually:\n\n` +
-      `  ${MARKER}\n` +
-      `  if command -v mdenc >/dev/null 2>&1; then\n` +
-      `    mdenc ${hookName}\n` +
-      `  elif [ -x "./node_modules/.bin/mdenc" ]; then\n` +
-      `    ./node_modules/.bin/mdenc ${hookName}\n` +
-      `  fi\n\n`,
-  );
+function isFilterConfigured(repoRoot: string): boolean {
+  try {
+    const val = execFileSync('git', ['config', '--get', 'filter.mdenc.process'], {
+      cwd: repoRoot,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+    return val.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 export async function initCommand(): Promise<void> {
   const repoRoot = findGitRoot();
-  const hooksDir = getHooksDir();
 
-  for (const hookName of HOOK_NAMES) {
-    const hookPath = join(hooksDir, hookName);
-
-    if (!existsSync(hookPath)) {
-      writeFileSync(hookPath, newHookScript(hookName));
-      chmodSync(hookPath, 0o755);
-      console.log(`Installed ${hookName} hook`);
-      continue;
-    }
-
-    const content = readFileSync(hookPath, 'utf-8');
-
-    if (content.includes(MARKER)) {
-      console.log(`${hookName} hook already installed (skipped)`);
-      continue;
-    }
-
-    // Safety checks
-    if (isBinary(content)) {
-      process.stderr.write(
-        `mdenc: ${hookName} hook appears to be a binary file. Skipping.\n`,
-      );
-      printManualInstructions(hookName);
-      continue;
-    }
-
-    if (!hasShellShebang(content)) {
-      process.stderr.write(
-        `mdenc: ${hookName} hook has no shell shebang. Skipping.\n`,
-      );
-      printManualInstructions(hookName);
-      continue;
-    }
-
-    if (looksLikeFrameworkHook(content)) {
-      process.stderr.write(
-        `mdenc: ${hookName} hook appears to be managed by a framework. Skipping.\n`,
-      );
-      printManualInstructions(hookName);
-      continue;
-    }
-
-    // Safe to append
-    writeFileSync(hookPath, content.trimEnd() + '\n' + hookBlock(hookName) + '\n');
-    chmodSync(hookPath, 0o755);
-    console.log(`Appended mdenc to existing ${hookName} hook`);
+  // Configure git filter
+  if (isFilterConfigured(repoRoot)) {
+    console.log('Git filter already configured (skipped)');
+  } else {
+    configureGitFilter(repoRoot);
+    console.log('Configured git filter (filter.mdenc + diff.mdenc)');
   }
 
   // Add .mdenc-password to root .gitignore
@@ -130,68 +62,39 @@ export async function initCommand(): Promise<void> {
     console.log('Created .gitignore with .mdenc-password');
   }
 
-  // Decrypt existing .mdenc files
-  const { decryptAll } = await import('./hooks.js');
-  const { decrypted } = await decryptAll();
-  if (decrypted > 0) {
-    console.log(`Decrypted ${decrypted} existing file(s)`);
+  // Re-checkout marked dirs to trigger smudge filter
+  const markedDirs = findMarkedDirs(repoRoot);
+  if (markedDirs.length > 0) {
+    const { relative } = await import('node:path');
+    for (const dir of markedDirs) {
+      const relDir = relative(repoRoot, dir) || '.';
+      try {
+        execFileSync('git', ['checkout', 'HEAD', '--', `${relDir}/*.md`], {
+          cwd: repoRoot,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } catch {
+        // No .md files tracked yet — fine
+      }
+    }
   }
 
   console.log('mdenc git integration initialized.');
 }
 
-export function removeHooksCommand(): void {
-  const hooksDir = getHooksDir();
-  let removedCount = 0;
+export function removeFilterCommand(): void {
+  const repoRoot = findGitRoot();
 
-  for (const hookName of HOOK_NAMES) {
-    const hookPath = join(hooksDir, hookName);
-
-    if (!existsSync(hookPath)) continue;
-
-    const content = readFileSync(hookPath, 'utf-8');
-    if (!content.includes(MARKER)) {
-      console.log(`${hookName}: no mdenc block found (skipped)`);
-      continue;
+  for (const section of ['filter.mdenc', 'diff.mdenc']) {
+    try {
+      execFileSync('git', ['config', '--local', '--remove-section', section], {
+        cwd: repoRoot,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+    } catch {
+      // Section may not exist
     }
-
-    // Remove the mdenc block: from the marker line through the matching fi
-    const lines = content.split('\n');
-    const filtered: string[] = [];
-    let inBlock = false;
-
-    for (const line of lines) {
-      if (line.trim() === MARKER) {
-        inBlock = true;
-        continue;
-      }
-      if (inBlock) {
-        if (line.trim() === 'fi') {
-          inBlock = false;
-          continue;
-        }
-        continue;
-      }
-      filtered.push(line);
-    }
-
-    const result = filtered.join('\n');
-    const isEmpty = result.split('\n').every(l => l.trim() === '' || l.startsWith('#!'));
-
-    if (isEmpty) {
-      unlinkSync(hookPath);
-      console.log(`Removed ${hookName} hook (was mdenc-only)`);
-    } else {
-      writeFileSync(hookPath, result);
-      console.log(`Removed mdenc block from ${hookName} hook`);
-    }
-
-    removedCount++;
   }
 
-  if (removedCount === 0) {
-    console.log('No mdenc hooks found to remove.');
-  } else {
-    console.log('mdenc hooks removed.');
-  }
+  console.log('Removed git filter configuration.');
 }

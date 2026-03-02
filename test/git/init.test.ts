@@ -1,26 +1,35 @@
 import { describe, it, expect, afterEach } from 'bun:test';
-import { readFileSync, writeFileSync, existsSync, chmodSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { createTempGitRepo, mdenc, mdencStderr, type TempGitRepo } from './helpers.js';
+import { execFileSync } from 'node:child_process';
+import { createTempGitRepo, mdenc, type TempGitRepo } from './helpers.js';
+
+function gitConfig(repo: string, key: string): string | null {
+  try {
+    return execFileSync('git', ['config', '--get', key], {
+      cwd: repo,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+  } catch {
+    return null;
+  }
+}
 
 describe('mdenc init', () => {
   let repo: TempGitRepo;
 
   afterEach(() => repo?.cleanup());
 
-  it('installs all four hook files', () => {
+  it('configures git filter and diff settings', () => {
     repo = createTempGitRepo();
     mdenc(repo.path, ['init']);
 
-    const hooksDir = join(repo.path, '.git', 'hooks');
-    for (const name of ['pre-commit', 'post-checkout', 'post-merge', 'post-rewrite']) {
-      const hookPath = join(hooksDir, name);
-      expect(existsSync(hookPath), `${name} hook should exist`).toBe(true);
-      const content = readFileSync(hookPath, 'utf-8');
-      expect(content).toContain('# mdenc-hook-marker');
-      expect(content).toContain(`mdenc ${name}`);
-      expect(content).toContain('#!/bin/sh');
-    }
+    expect(gitConfig(repo.path, 'filter.mdenc.process')).toBe('mdenc filter-process');
+    expect(gitConfig(repo.path, 'filter.mdenc.clean')).toBe('mdenc filter-clean %f');
+    expect(gitConfig(repo.path, 'filter.mdenc.smudge')).toBe('mdenc filter-smudge %f');
+    expect(gitConfig(repo.path, 'filter.mdenc.required')).toBe('true');
+    expect(gitConfig(repo.path, 'diff.mdenc.textconv')).toBe('mdenc textconv');
   });
 
   it('adds .mdenc-password to .gitignore', () => {
@@ -33,45 +42,11 @@ describe('mdenc init', () => {
 
   it('is idempotent on re-run', () => {
     repo = createTempGitRepo();
-    const out1 = mdenc(repo.path, ['init']);
+    mdenc(repo.path, ['init']);
     const out2 = mdenc(repo.path, ['init']);
 
-    expect(out2).toContain('already installed');
+    expect(out2).toContain('already configured');
     expect(out2).toContain('.mdenc-password already in .gitignore');
-
-    // Hook file should contain marker exactly once
-    const hookContent = readFileSync(join(repo.path, '.git', 'hooks', 'pre-commit'), 'utf-8');
-    const markerCount = (hookContent.match(/# mdenc-hook-marker/g) || []).length;
-    expect(markerCount).toBe(1);
-  });
-
-  it('appends to existing shell hooks', () => {
-    repo = createTempGitRepo();
-
-    const hookPath = join(repo.path, '.git', 'hooks', 'pre-commit');
-    writeFileSync(hookPath, '#!/bin/sh\necho "existing hook"\n');
-    chmodSync(hookPath, 0o755);
-
-    mdenc(repo.path, ['init']);
-
-    const content = readFileSync(hookPath, 'utf-8');
-    expect(content).toContain('echo "existing hook"');
-    expect(content).toContain('# mdenc-hook-marker');
-  });
-
-  it('refuses to modify non-shell hooks and prints instructions', () => {
-    repo = createTempGitRepo();
-
-    const hookPath = join(repo.path, '.git', 'hooks', 'pre-commit');
-    writeFileSync(hookPath, '#!/usr/bin/env python3\nprint("hello")\n');
-    chmodSync(hookPath, 0o755);
-
-    const { stderr } = mdencStderr(repo.path, ['init']);
-    expect(stderr).toContain('unrecognized format');
-
-    // Should NOT have been modified
-    const content = readFileSync(hookPath, 'utf-8');
-    expect(content).not.toContain('mdenc-hook-marker');
   });
 
   it('appends .mdenc-password to existing .gitignore without duplicating', () => {
@@ -89,43 +64,28 @@ describe('mdenc init', () => {
   });
 });
 
-describe('mdenc remove-hooks', () => {
+describe('mdenc remove-filter', () => {
   let repo: TempGitRepo;
 
   afterEach(() => repo?.cleanup());
 
-  it('removes mdenc blocks from hooks', () => {
+  it('removes filter configuration', () => {
     repo = createTempGitRepo();
     mdenc(repo.path, ['init']);
-    mdenc(repo.path, ['remove-hooks']);
 
-    const hooksDir = join(repo.path, '.git', 'hooks');
-    for (const name of ['pre-commit', 'post-checkout', 'post-merge', 'post-rewrite']) {
-      const hookPath = join(hooksDir, name);
-      // mdenc-only hooks should be deleted entirely
-      expect(existsSync(hookPath), `${name} hook should be removed`).toBe(false);
-    }
+    // Verify config is set
+    expect(gitConfig(repo.path, 'filter.mdenc.process')).not.toBeNull();
+
+    mdenc(repo.path, ['remove-filter']);
+
+    expect(gitConfig(repo.path, 'filter.mdenc.process')).toBeNull();
+    expect(gitConfig(repo.path, 'filter.mdenc.required')).toBeNull();
+    expect(gitConfig(repo.path, 'diff.mdenc.textconv')).toBeNull();
   });
 
-  it('preserves non-mdenc content in hooks', () => {
+  it('is safe to run when no filter is configured', () => {
     repo = createTempGitRepo();
-
-    // Create a hook with existing content
-    const hookPath = join(repo.path, '.git', 'hooks', 'pre-commit');
-    writeFileSync(hookPath, '#!/bin/sh\necho "keep this"\n');
-    chmodSync(hookPath, 0o755);
-
-    mdenc(repo.path, ['init']);
-    mdenc(repo.path, ['remove-hooks']);
-
-    const content = readFileSync(hookPath, 'utf-8');
-    expect(content).toContain('echo "keep this"');
-    expect(content).not.toContain('mdenc-hook-marker');
-  });
-
-  it('is safe to run when no hooks are installed', () => {
-    repo = createTempGitRepo();
-    const output = mdenc(repo.path, ['remove-hooks']);
-    expect(output).toContain('No mdenc hooks found');
+    const output = mdenc(repo.path, ['remove-filter']);
+    expect(output).toContain('Removed git filter configuration');
   });
 });

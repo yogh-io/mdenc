@@ -56,9 +56,16 @@ seal_b64=<HMAC-SHA256 of all lines above>
 
 ### Git Integration (`src/git/`)
 
-`mdenc init` installs hooks; `mdenc mark <dir>` creates `.mdenc.conf` + `.gitignore` (ignoring `*.md`). The pre-commit hook encrypts `.md` → `.mdenc` and stages the encrypted file. Post-checkout/merge/rewrite hooks decrypt back.
+Uses git's native **smudge/clean filter** mechanism. `.md` files are tracked directly in git; the filter transparently encrypts/decrypts:
 
-`mdenc watch` runs a file watcher that re-encrypts on save, so `git diff` shows encrypted diffs in real time.
+- `mdenc init` configures `filter.mdenc` and `diff.mdenc` in `.git/config` (per-clone setup)
+- `mdenc mark <dir>` creates `.mdenc.conf` + `.gitattributes` (with `*.md filter=mdenc diff=mdenc`)
+- **Clean filter** (staging): plaintext → encrypted mdenc format in git objects
+- **Smudge filter** (checkout): encrypted → plaintext in working directory
+- **Long-running process** (`filter-process`): single process handles all files, caches derived keys
+- **Textconv**: `diff.mdenc.textconv` enables plaintext diffs via `git diff`
+
+Key files: `filter.ts` (core clean/smudge logic), `filter-process.ts` (git protocol v2 pkt-line), `textconv.ts`, `init.ts`, `mark.ts`.
 
 ### Build Setup
 
