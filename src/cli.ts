@@ -7,6 +7,7 @@ import { genpassCommand } from "./git/genpass.js";
 import { initCommand, removeFilterCommand } from "./git/init.js";
 import { markCommand } from "./git/mark.js";
 import { statusCommand } from "./git/status.js";
+import { diffDriverCommand } from "./git/diff-driver.js";
 import { textconvCommand } from "./git/textconv.js";
 
 function readPasswordFromTTY(prompt: string): Promise<string> {
@@ -108,7 +109,8 @@ Internal (called by git):
   mdenc filter-process                Long-running filter process
   mdenc filter-clean <path>           Single-file clean filter
   mdenc filter-smudge <path>          Single-file smudge filter
-  mdenc textconv <file>               Output plaintext for git diff`);
+  mdenc textconv <file>               Output plaintext for git diff
+  mdenc diff-driver <path> ...        Custom diff driver (encrypted + plaintext)`);
   process.exit(1);
 }
 
@@ -205,6 +207,10 @@ async function main(): Promise<void> {
 
       case "filter-smudge":
         await simpleSmudgeFilter();
+        break;
+
+      case "diff-driver":
+        await diffDriverCommand(args.slice(1));
         break;
 
       case "textconv":
