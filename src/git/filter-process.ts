@@ -187,6 +187,7 @@ export async function filterProcessMain(): Promise<void> {
       writeFlush();
       writeBinaryPktLines(resultBuf);
       writeFlush();
+      writeFlush(); // empty list = status unchanged
     } catch (err) {
       process.stderr.write(
         `mdenc: filter error for ${pathname}: ${err instanceof Error ? err.message : err}\n`,

@@ -1,7 +1,6 @@
 export { decrypt, encrypt } from "./encrypt.js";
 export { verifySeal } from "./seal.js";
 export type {
-  DecryptOptions,
   EncryptOptions,
   MdencChunk,
   MdencFile,

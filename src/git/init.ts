@@ -8,7 +8,7 @@ const FILTER_CONFIGS: [string, string][] = [
   ["filter.mdenc.clean", "mdenc filter-clean %f"],
   ["filter.mdenc.smudge", "mdenc filter-smudge %f"],
   ["filter.mdenc.required", "true"],
-  ["diff.mdenc.textconv", "mdenc textconv"],
+  ["diff.mdenc.command", "mdenc diff-driver"],
 ];
 
 function configureGitFilter(repoRoot: string): void {

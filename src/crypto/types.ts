@@ -47,5 +47,3 @@ export interface EncryptOptions {
   scrypt?: ScryptParams;
   previousFile?: string; // previous encrypted file content for ciphertext reuse
 }
-
-export type DecryptOptions = Record<string, never>;

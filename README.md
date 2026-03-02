@@ -92,29 +92,28 @@ Password is read from `MDENC_PASSWORD` env var or prompted interactively (no ech
 
 ## Git Integration
 
-mdenc can automatically encrypt and decrypt files as part of your git workflow.
+mdenc uses git's native **smudge/clean filter** to transparently encrypt and decrypt `.md` files. You edit plaintext locally; git stores ciphertext in the repository.
 
 ```bash
-# Set up git hooks (pre-commit, post-checkout, post-merge, post-rewrite)
+# Set up git smudge/clean filter and textconv diff
 mdenc init
 
 # Generate a random password into .mdenc-password
-mdenc genpass
+mdenc genpass [--force]
 
-# Mark a directory -- .md files inside will be encrypted on commit
+# Mark a directory -- .md files inside will be filtered
 mdenc mark docs/private
 
-# See which files need encryption/decryption
+# See which files are configured for encryption
 mdenc status
 
-# Watch for changes and encrypt on save
-mdenc watch
-
-# Remove mdenc hooks from the repository
-mdenc remove-hooks
+# Remove git filter configuration
+mdenc remove-filter
 ```
 
-After `mdenc init` and `mdenc mark`, the workflow is automatic: edit `.md` files normally, and the pre-commit hook encrypts them to `.mdenc` before each commit. Post-checkout and post-merge hooks decrypt them back after switching branches or pulling.
+After `mdenc init` and `mdenc mark`, the workflow is transparent: the **clean filter** encrypts `.md` files when they're staged (`git add`), and the **smudge filter** decrypts them on checkout. You always see plaintext in your working directory. The `textconv` driver lets `git diff` show plaintext diffs of encrypted content.
+
+> **[Try the demo](https://yogh-io.github.io/mdenc/)** -- encrypt and decrypt Markdown in the browser.
 
 ## Library
 
