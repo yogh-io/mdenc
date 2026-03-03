@@ -4,6 +4,8 @@
 
 [**Live Demo**](https://yogh-io.github.io/mdenc/) | [npm](https://www.npmjs.com/package/mdenc) | [Specification](SPECIFICATION.md) | [Security](SECURITY.md)
 
+> **⚠️ No third-party audit.** mdenc has not been independently audited. The cryptographic design is documented in [SPECIFICATION.md](SPECIFICATION.md) and [SECURITY.md](SECURITY.md) and is open for review, but until a formal audit has been completed, **use this at your own risk and do not rely on it to protect high-value secrets.**
+
 mdenc lets you store encrypted Markdown in git without losing the ability to see *what changed*. Edit one paragraph, and only that paragraph changes in the encrypted output. Your `git log` stays useful. Your pull request reviews stay sane.
 
 ## What it looks like
@@ -62,9 +64,21 @@ One paragraph changed, one line in the diff (plus the seal updates). Even insert
 
 ## Why
 
-You want to keep private notes, journals, or sensitive docs in a git repo. GPG-encrypting the whole file works, but every tiny edit produces a completely different blob. The entire file shows as changed in every commit.
+You have internal documentation -- team processes, onboarding guides, infrastructure notes -- that shouldn't sit in plaintext on a public git repository, but that isn't truly secret either. Everyone on the team who needs this information shares the same password.
+
+GPG-encrypting the whole file works, but every tiny edit produces a completely different blob. The entire file shows as changed in every commit.
 
 mdenc encrypts at paragraph granularity. Unchanged paragraphs produce identical ciphertext, so git only tracks the paragraphs you actually touched.
+
+## What this is (and isn't) for
+
+mdenc is designed to **obscure content that shouldn't be publicly readable** -- not to be a vault for high-value secrets.
+
+The typical use case is a team that keeps internal documentation in a public (or semi-public) git repo: things like internal process docs, team contact info, environment setup instructions, or notes that are useful to the team but shouldn't be indexed by search engines or casually browsed by strangers.
+
+**Why not for real secrets?** The password must be shared with everyone who needs access. In practice this means it's passed around in a Slack channel, a shared password manager, or a wiki. A widely-shared password is a single point of failure -- if it leaks, everything encrypted with it is exposed at once. That's fine when the content is "how to pull data from our internal SFTP" and unacceptable when the content is credentials, API keys, or genuinely confidential data. For those, use a proper secrets manager.
+
+Think of mdenc as the digital equivalent of a locked filing cabinet in an open office: it keeps honest people honest and prevents casual snooping, but it's not a safe.
 
 ## Install
 
@@ -147,14 +161,14 @@ The password is stretched with scrypt (N=16384, r=8, p=1). Keys are derived via 
 
 ## What leaks
 
-mdenc is designed for diff-friendliness, not metadata hiding. An observer can see:
+mdenc is designed for diff-friendliness, not metadata hiding. An observer without the password can see:
 
 - How many paragraphs your document has
 - Approximate size of each paragraph
 - Which paragraphs changed between commits
 - Identical paragraphs within a file (they produce identical ciphertext)
 
-The *content* of your paragraphs stays confidential.
+The *content* of your paragraphs stays confidential. See [SECURITY.md](SECURITY.md) for the full threat model and accepted tradeoffs.
 
 ## Docs
 

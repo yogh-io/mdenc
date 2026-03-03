@@ -1,5 +1,7 @@
 # mdenc v1 Specification
 
+> **Note:** mdenc is designed to obscure content in public git repositories, not to protect high-value secrets. The password is typically shared across a team, making it a single point of failure. See [SECURITY.md](SECURITY.md) for the full threat model and intended use case. This specification has **not** been independently audited.
+
 ## Overview
 
 mdenc is a diff-friendly encrypted Markdown format. It produces UTF-8 text output suitable for version control with git. The format encrypts Markdown files at paragraph granularity so that edits to one paragraph produce minimal diffs in the encrypted output.

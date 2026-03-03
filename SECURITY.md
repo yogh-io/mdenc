@@ -1,5 +1,25 @@
 # mdenc Security Model
 
+> **⚠️ No third-party audit.** mdenc has not been independently audited. The cryptographic design is documented here and in [SPECIFICATION.md](SPECIFICATION.md) and is open for review, but until a formal audit has been completed, use this at your own risk.
+
+## Intended Use Case
+
+mdenc is designed to **obscure content that shouldn't be publicly readable in a git repository** -- not to protect high-value secrets.
+
+The expected scenario is a team storing internal documentation (process docs, environment setup notes, team contact info, onboarding guides) in a public or semi-public repo. This content shouldn't be in plaintext on the internet, but it isn't confidential enough to warrant a dedicated secrets management infrastructure.
+
+**Crucially, the password is shared with everyone who needs access.** In practice it lives in a shared password manager entry, a pinned Slack message, or a team wiki. A widely-shared password is inherently a single point of failure: if it leaks, all content encrypted with it is exposed at once. This is an acceptable tradeoff when the content is "how to connect to our staging SFTP server" and an unacceptable one when the content is API keys, credentials, PII, or anything genuinely confidential.
+
+**Do not use mdenc for:**
+- Credentials, tokens, or API keys (use a secrets manager)
+- Personally identifiable information subject to regulatory requirements
+- Data where a single password leak would cause material harm
+- Anything where the threat model requires protection against a determined, resourced attacker
+
+## Audit Status
+
+mdenc has **not** been independently audited. The underlying cryptographic primitives come from audited libraries (`@noble/ciphers`, `@noble/hashes`), but the protocol design, key derivation scheme, and implementation have not been reviewed by a third party. Community review and feedback are welcome.
+
 ## Threat Model
 
 mdenc protects Markdown files at rest in git repositories. The assumed attacker can:
