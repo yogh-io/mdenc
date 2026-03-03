@@ -78,6 +78,12 @@ The typical use case is a team that keeps internal documentation in a public (or
 
 **Why not for real secrets?** The password must be shared with everyone who needs access. In practice this means it's passed around in a Slack channel, a shared password manager, or a wiki. A widely-shared password is a single point of failure -- if it leaks, everything encrypted with it is exposed at once. That's fine when the content is "how to pull data from our internal SFTP" and unacceptable when the content is credentials, API keys, or genuinely confidential data. For those, use a proper secrets manager.
 
+**Other things to know:**
+
+- **No forward secrecy.** Anyone who obtains the password and the git history can decrypt every version of every file ever committed. There is no per-session key rotation or ephemeral key exchange.
+- **No password rotation mechanism.** Changing the password means re-encrypting every file and redistributing the new password to the entire team. There is no built-in command for this -- you re-encrypt manually.
+- **Metadata leaks by design.** mdenc intentionally trades some metadata privacy (paragraph count, sizes, edit patterns) for usable git diffs. This is a design choice, not a bug. See [What leaks](#what-leaks).
+
 Think of mdenc as the digital equivalent of a locked filing cabinet in an open office: it keeps honest people honest and prevents casual snooping, but it's not a safe.
 
 ## Install

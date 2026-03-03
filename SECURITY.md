@@ -124,9 +124,19 @@ mdenc uses scrypt for password stretching, which provides:
 - Memory-hard computation (resists GPU/ASIC attacks)
 - Time-hard computation (sequential memory access pattern)
 
-The default parameters (N=16384, r=8, p=1, ~16 MiB memory) are suitable for interactive use. Users with higher security requirements can increase these parameters.
+The default parameters (N=16384, r=8, p=1, ~16 MiB memory) are deliberately conservative for interactive use. The scrypt KDF runs inside git's clean/smudge filter on every `git add` and `git checkout`, so higher parameters directly impact everyday git performance. Users with higher security requirements can increase these parameters via the `scrypt=N=...,r=...,p=...` header field; this is a per-file setting.
 
 Passwords are NFKC-normalized before use to ensure consistent key derivation across platforms and input methods.
+
+## Password Rotation
+
+There is no built-in password rotation mechanism. Changing the password requires re-encrypting every file with the new password and redistributing it to all team members. Because the salt and file ID change with a new password, the re-encryption will produce a full-file diff for every file.
+
+Old ciphertext committed under the previous password remains in git history. Anyone who obtains the old password can still decrypt those historical versions. This is inherent to the design -- mdenc does not provide forward secrecy.
+
+## No Forward Secrecy
+
+mdenc provides no forward secrecy. There is no per-session key exchange or ephemeral key material. If an attacker obtains the password at any point, they can decrypt every version of every file ever committed under that password in the git history. This is an accepted limitation given the intended use case (widely-shared password for non-secret content).
 
 ## Dependencies
 
